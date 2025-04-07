@@ -1,12 +1,20 @@
 
-import { ShoppingCart, User, Search, Menu, Phone, Mail, X, ChevronDown, Heart } from "lucide-react";
+import { ShoppingCart, User, Search, Menu, Phone, Mail, X, ChevronDown, Heart, LogOut } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isPromoBarVisible, setIsPromoBarVisible] = useState(true);
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   return (
     <header className="bg-white">
@@ -118,13 +126,8 @@ const Header = () => {
               Home
             </Link>
             <div className="relative group">
-              <Link to="/category/dry-fruits" className="text-gray-800 hover:text-amber-600 font-medium flex items-center">
-                Dry Fruits <ChevronDown size={16} className="ml-1" />
-              </Link>
-            </div>
-            <div className="relative group">
-              <Link to="/category/spices" className="text-gray-800 hover:text-amber-600 font-medium flex items-center">
-                Spices <ChevronDown size={16} className="ml-1" />
+              <Link to="/products" className="text-gray-800 hover:text-amber-600 font-medium flex items-center">
+                Products <ChevronDown size={16} className="ml-1" />
               </Link>
             </div>
             <Link to="/about" className="text-gray-800 hover:text-amber-600 font-medium">
@@ -158,9 +161,31 @@ const Header = () => {
             <Link to="/cart" className="text-gray-800 hover:text-amber-600">
               <ShoppingCart size={22} />
             </Link>
-            <Link to="/account" className="text-amber-600 font-medium hidden md:block">
-              Sign In
-            </Link>
+            
+            {user ? (
+              <div className="relative group hidden md:block">
+                <button className="flex items-center text-amber-600 font-medium">
+                  <User size={22} className="mr-1" />
+                  <span className="hidden lg:inline">Account</span>
+                  <ChevronDown size={16} className="ml-1" />
+                </button>
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                  <Link to="/profile" className="block px-4 py-2 text-gray-800 hover:bg-amber-50">My Profile</Link>
+                  <Link to="/orders" className="block px-4 py-2 text-gray-800 hover:bg-amber-50">My Orders</Link>
+                  <button 
+                    onClick={handleSignOut}
+                    className="w-full text-left px-4 py-2 text-gray-800 hover:bg-amber-50 flex items-center"
+                  >
+                    <LogOut size={16} className="mr-2" /> Sign Out
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <Link to="/login" className="text-amber-600 font-medium hidden md:block">
+                Sign In
+              </Link>
+            )}
+            
             <button 
               className="md:hidden text-gray-800 hover:text-amber-600"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -192,18 +217,11 @@ const Header = () => {
                 Home
               </Link>
               <Link 
-                to="/category/dry-fruits" 
+                to="/products" 
                 className="text-gray-800 hover:text-amber-600 font-medium"
                 onClick={() => setIsMenuOpen(false)}
               >
-                Dry Fruits
-              </Link>
-              <Link 
-                to="/category/spices" 
-                className="text-gray-800 hover:text-amber-600 font-medium"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Spices
+                Products
               </Link>
               <Link 
                 to="/about" 
@@ -219,13 +237,43 @@ const Header = () => {
               >
                 Contact Us
               </Link>
-              <Link 
-                to="/account" 
-                className="text-gray-800 hover:text-amber-600 font-medium"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Sign In
-              </Link>
+              
+              {user ? (
+                <>
+                  <Link 
+                    to="/profile" 
+                    className="text-gray-800 hover:text-amber-600 font-medium"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    My Profile
+                  </Link>
+                  <Link 
+                    to="/orders" 
+                    className="text-gray-800 hover:text-amber-600 font-medium"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    My Orders
+                  </Link>
+                  <button
+                    onClick={() => {
+                      handleSignOut();
+                      setIsMenuOpen(false);
+                    }}
+                    className="text-left text-gray-800 hover:text-amber-600 font-medium flex items-center"
+                  >
+                    <LogOut size={16} className="mr-2" /> Sign Out
+                  </button>
+                </>
+              ) : (
+                <Link 
+                  to="/login" 
+                  className="text-gray-800 hover:text-amber-600 font-medium"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Sign In
+                </Link>
+              )}
+              
               <div className="flex justify-between pt-2 border-t border-gray-200">
                 <div className="flex items-center">
                   <span className="text-gray-800 font-medium flex items-center">
