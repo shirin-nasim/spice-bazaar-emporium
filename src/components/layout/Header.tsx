@@ -1,9 +1,9 @@
-
-import { ShoppingCart, User, Search, Menu, Phone, Mail, X, ChevronDown, Heart, LogOut } from "lucide-react";
+import { ShoppingCart, User, Menu, Phone, Mail, X, ChevronDown, Heart, LogOut } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { SearchBar } from "@/components/search/SearchBar";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -111,13 +111,11 @@ const Header = () => {
           </Link>
 
           {/* Search Bar */}
-          <div className="hidden md:flex relative w-1/3">
-            <input
-              type="text"
-              placeholder="Search products, spices, recipes..."
-              className="w-full pl-10 pr-4 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-1 focus:ring-amber-500"
+          <div className="hidden md:block relative w-1/3">
+            <SearchBar 
+              minimal={true}
+              placeholder="Search products, spices, recipes..." 
             />
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
           </div>
 
           {/* Navigation */}
@@ -200,12 +198,10 @@ const Header = () => {
           <div className="md:hidden mt-4 pb-2">
             <div className="flex justify-center mb-4">
               <div className="relative w-full px-4">
-                <input
-                  type="text"
-                  placeholder="Search products, spices, recipes..."
-                  className="w-full pl-10 pr-4 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                <SearchBar 
+                  minimal={true}
+                  placeholder="Search products, spices, recipes..." 
                 />
-                <Search className="absolute left-7 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
               </div>
             </div>
             <nav className="flex flex-col space-y-3 px-4">
