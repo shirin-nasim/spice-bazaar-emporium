@@ -11,11 +11,13 @@ import LoginPage from "./pages/auth/LoginPage";
 import RegisterPage from "./pages/auth/RegisterPage";
 import ProductsPage from "./pages/ProductsPage";
 import ProductDetailPage from "./pages/ProductDetailPage";
+import CategoryPage from "./pages/CategoryPage";
 import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import ProfilePage from "./pages/ProfilePage";
 import AboutPage from "./pages/AboutPage";
 import ContactPage from "./pages/ContactPage";
+import AdminDashboard from "./pages/admin/AdminDashboard";
 import PrivateRoute from "./components/auth/PrivateRoute";
 
 const queryClient = new QueryClient();
@@ -32,7 +34,8 @@ const App = () => (
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/products" element={<ProductsPage />} />
-            <Route path="/products/:id" element={<ProductDetailPage />} />
+            <Route path="/products/:slug" element={<ProductDetailPage />} />
+            <Route path="/categories/:slug" element={<CategoryPage />} />
             <Route path="/cart" element={<CartPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/about" element={<AboutPage />} />
@@ -40,6 +43,11 @@ const App = () => (
             <Route path="/profile" element={
               <PrivateRoute>
                 <ProfilePage />
+              </PrivateRoute>
+            } />
+            <Route path="/admin" element={
+              <PrivateRoute>
+                <AdminDashboard />
               </PrivateRoute>
             } />
             <Route path="*" element={<NotFound />} />

@@ -1,221 +1,251 @@
 
-import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, ShoppingCart, Heart, Share2, Star, Truck, ShieldCheck, RotateCcw, Minus, Plus } from "lucide-react";
-import MainLayout from "@/components/layout/MainLayout";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
+import { useEffect, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import MainLayout from '@/components/layout/MainLayout';
+import { 
+  getProductBySlug, 
+  getProductReviews, 
+  getRelatedProducts, 
+  createReview 
+} from '@/api/productApi';
+import { addToCart, getUserCart } from '@/api/cartApi';
+import { addToWishlist, isInWishlist, removeFromWishlist } from '@/api/wishlistApi';
+import { Product, Review } from '@/types/database.types';
+import ProductCard from '@/components/shared/ProductCard';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { 
+  Star, 
+  Heart, 
+  Minus, 
+  Plus, 
+  ShoppingCart, 
+  PackageCheck, 
+  Truck, 
+  RefreshCw, 
+  Check 
+} from 'lucide-react';
+import { format } from 'date-fns';
+import { useForm } from 'react-hook-form';
+import * as z from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 
-type Product = {
-  id: number;
-  name: string;
-  description: string;
-  price: number;
-  sale_price: number | null;
-  category: string;
-  image_url: string;
-  rating: number;
-  stock: number;
-  featured: boolean;
-  details?: string;
-  ingredients?: string;
-  usage?: string;
-  reviews?: {
-    id: number;
-    user: string;
-    avatar: string;
-    rating: number;
-    date: string;
-    comment: string;
-  }[];
-  related?: number[];
-};
+const reviewSchema = z.object({
+  rating: z.number().min(1).max(5),
+  comment: z.string().min(5, "Comment must be at least 5 characters").max(500)
+});
 
 const ProductDetailPage = () => {
-  const { id } = useParams<{ id: string }>();
+  const { slug } = useParams<{ slug: string }>();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  
   const [product, setProduct] = useState<Product | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPackSize, setSelectedPackSize] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
-  const { toast } = useToast();
-
+  const [addingToCart, setAddingToCart] = useState(false);
+  const [inWishlist, setInWishlist] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [addingReview, setAddingReview] = useState(false);
+  const [selectedRating, setSelectedRating] = useState(5);
+  
+  const form = useForm<z.infer<typeof reviewSchema>>({
+    resolver: zodResolver(reviewSchema),
+    defaultValues: {
+      rating: 5,
+      comment: ""
+    }
+  });
+  
   useEffect(() => {
     const fetchProductDetails = async () => {
+      if (!slug) return;
+      
       setLoading(true);
+      
       try {
-        // Mock API call - this would be replaced with an actual API call
-        // For demo purposes, we're manually creating the product data
+        const productData = await getProductBySlug(slug);
         
-        // This is placeholder data - in a real app, you'd fetch from Supabase
-        const mockProduct: Product = {
-          id: parseInt(id || "1"),
-          name: "Premium Cashews",
-          description: "Roasted and lightly salted premium cashews sourced from organic farms. Our cashews are carefully selected for quality and flavor, ensuring a delicious and nutritious snack experience.",
-          price: 12.99,
-          sale_price: null,
-          category: "nuts",
-          image_url: "https://images.unsplash.com/photo-1536591168924-4eba31d6150f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80",
-          rating: 4.8,
-          stock: 100,
-          featured: true,
-          details: "Our Premium Cashews are sourced from organic farms in Vietnam and are carefully roasted to perfection. They are lightly salted to enhance their natural flavor without overwhelming it. These cashews are packed with proteins, healthy fats, and essential minerals, making them a perfect healthy snacking option.\n\nEach batch is tested for quality and freshness before packaging. Our vacuum-sealed packaging ensures the nuts stay fresh for longer.\n\nProduct of Vietnam. Packed in USA.",
-          ingredients: "Organic cashews, sea salt, organic high-oleic sunflower oil.",
-          usage: "Perfect for snacking, cooking, or adding to your favorite recipes. Store in a cool, dry place. Once opened, refrigerate for maximum freshness.",
-          reviews: [
-            {
-              id: 1,
-              user: "John D.",
-              avatar: "https://randomuser.me/api/portraits/men/1.jpg",
-              rating: 5,
-              date: "2023-10-15",
-              comment: "These cashews are amazing! So fresh and the perfect amount of salt. Will definitely buy again."
-            },
-            {
-              id: 2,
-              user: "Sarah M.",
-              avatar: "https://randomuser.me/api/portraits/women/2.jpg",
-              rating: 4,
-              date: "2023-09-28",
-              comment: "Really good quality, but the package was a bit smaller than I expected. Taste is excellent though!"
-            },
-            {
-              id: 3,
-              user: "Robert J.",
-              avatar: "https://randomuser.me/api/portraits/men/3.jpg",
-              rating: 5,
-              date: "2023-09-10",
-              comment: "Best cashews I've ever had! The taste is perfect and they're very fresh."
-            },
-            {
-              id: 4,
-              user: "Emily L.",
-              avatar: "https://randomuser.me/api/portraits/women/4.jpg",
-              rating: 4,
-              date: "2023-08-22",
-              comment: "Great quality and taste. I use them in my morning oatmeal and they add the perfect crunch."
-            }
-          ],
-          related: [2, 8, 10, 1]
-        };
-
-        // Mock related products
-        const mockRelatedProducts: Product[] = [
-          {
-            id: 2,
-            name: "Organic Almonds",
-            description: "Raw organic almonds sourced from California",
-            price: 9.99,
-            sale_price: 7.99,
-            category: "nuts",
-            image_url: "https://images.unsplash.com/photo-1608797178993-a062e1517f62?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80",
-            rating: 4.7,
-            stock: 150,
-            featured: true
-          },
-          {
-            id: 8,
-            name: "Pistachio Nuts",
-            description: "Roasted and salted pistachio nuts",
-            price: 14.99,
-            sale_price: null,
-            category: "nuts",
-            image_url: "https://images.unsplash.com/photo-1600623052101-aa70e5b1e543?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80",
-            rating: 4.7,
-            stock: 85,
-            featured: true
-          },
-          {
-            id: 10,
-            name: "Trail Mix Supreme",
-            description: "A mix of nuts, seeds, and dried fruits",
-            price: 11.99,
-            sale_price: 9.99,
-            category: "mixes",
-            image_url: "https://images.unsplash.com/photo-1627485937980-221c88ac04a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80",
-            rating: 4.6,
-            stock: 120,
-            featured: true
-          },
-          {
-            id: 1,
-            name: "Premium Cashews",
-            description: "Roasted and lightly salted premium cashews",
-            price: 12.99,
-            sale_price: null,
-            category: "nuts",
-            image_url: "https://images.unsplash.com/photo-1536591168924-4eba31d6150f?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80",
-            rating: 4.8,
-            stock: 100,
-            featured: true
-          }
-        ];
+        if (!productData) {
+          setLoading(false);
+          return;
+        }
         
-        setProduct(mockProduct);
-        setRelatedProducts(mockRelatedProducts);
+        setProduct(productData);
+        setSelectedPackSize(productData.pack_sizes?.[0] || '');
+        
+        // Fetch reviews
+        const reviewsData = await getProductReviews(productData.id);
+        setReviews(reviewsData);
+        
+        // Fetch related products if we have a category
+        if (productData.category_id) {
+          const related = await getRelatedProducts(productData.category_id, productData.id, 4);
+          setRelatedProducts(related);
+        }
+        
+        // Check if in wishlist
+        if (user) {
+          const wishlistStatus = await isInWishlist(user.id, productData.id);
+          setInWishlist(wishlistStatus);
+        }
+        
+        setLoading(false);
       } catch (error) {
-        console.error("Error fetching product:", error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to load product details. Please try again.",
-        });
-      } finally {
+        console.error('Error fetching product details:', error);
         setLoading(false);
       }
     };
-
+    
     fetchProductDetails();
-  }, [id, toast]);
-
-  const decreaseQuantity = () => {
-    if (quantity > 1) {
-      setQuantity(quantity - 1);
+  }, [slug, user]);
+  
+  const handleQuantityChange = (change: number) => {
+    const newQuantity = quantity + change;
+    if (newQuantity > 0 && newQuantity <= 20) {
+      setQuantity(newQuantity);
     }
   };
-
-  const increaseQuantity = () => {
-    if (product && quantity < product.stock) {
-      setQuantity(quantity + 1);
-    }
-  };
-
-  const addToCart = () => {
-    if (product) {
+  
+  const handleAddToCart = async () => {
+    if (!user) {
       toast({
-        title: "Added to Cart",
-        description: `${quantity} x ${product.name} has been added to your cart.`,
+        title: 'Please sign in',
+        description: 'You need to be signed in to add items to your cart',
+        variant: 'destructive',
       });
+      return;
     }
-  };
-
-  const addToWishlist = () => {
-    if (product) {
+    
+    if (!product) return;
+    
+    setAddingToCart(true);
+    
+    try {
+      const cart = await getUserCart(user.id);
+      
+      if (!cart) {
+        throw new Error('Could not retrieve cart');
+      }
+      
+      const result = await addToCart(cart.id, product.id, quantity, selectedPackSize);
+      
+      if (result) {
+        toast({
+          title: 'Added to cart',
+          description: `${product.name} (${selectedPackSize}) has been added to your cart`,
+        });
+      } else {
+        throw new Error('Failed to add to cart');
+      }
+    } catch (error) {
       toast({
-        title: "Added to Wishlist",
-        description: `${product.name} has been added to your wishlist.`,
+        title: 'Error',
+        description: 'Failed to add product to cart',
+        variant: 'destructive',
       });
+    } finally {
+      setAddingToCart(false);
     }
   };
-
+  
+  const toggleWishlist = async () => {
+    if (!user) {
+      toast({
+        title: 'Please sign in',
+        description: 'You need to be signed in to add items to your wishlist',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (!product) return;
+    
+    setWishlistLoading(true);
+    
+    try {
+      if (inWishlist) {
+        await removeFromWishlist(user.id, product.id);
+        setInWishlist(false);
+        toast({
+          title: 'Removed from wishlist',
+          description: `${product.name} has been removed from your wishlist`,
+        });
+      } else {
+        await addToWishlist(user.id, product.id);
+        setInWishlist(true);
+        toast({
+          title: 'Added to wishlist',
+          description: `${product.name} has been added to your wishlist`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update wishlist',
+        variant: 'destructive',
+      });
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+  
+  const onReviewSubmit = async (data: z.infer<typeof reviewSchema>) => {
+    if (!user || !product) return;
+    
+    setAddingReview(true);
+    
+    try {
+      const result = await createReview(product.id, user.id, data.rating, data.comment);
+      
+      if (result) {
+        // Add the new review to the current reviews
+        setReviews(prev => [result, ...prev]);
+        
+        toast({
+          title: 'Review submitted',
+          description: 'Thank you for your feedback!',
+        });
+        
+        form.reset();
+      } else {
+        throw new Error('Failed to submit review');
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to submit review',
+        variant: 'destructive',
+      });
+    } finally {
+      setAddingReview(false);
+    }
+  };
+  
   if (loading) {
     return (
       <MainLayout>
-        <div className="container mx-auto py-12 px-4">
+        <div className="container mx-auto px-4 py-12">
           <div className="animate-pulse">
-            <div className="h-6 bg-gray-200 rounded w-1/4 mb-8"></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-              <div className="h-96 bg-gray-200 rounded"></div>
-              <div className="space-y-4">
-                <div className="h-10 bg-gray-200 rounded w-3/4"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-                <div className="h-24 bg-gray-200 rounded"></div>
-                <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-                <div className="h-12 bg-gray-200 rounded"></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="h-12 bg-gray-200 rounded"></div>
-                  <div className="h-12 bg-gray-200 rounded"></div>
-                </div>
+              <div className="bg-gray-200 aspect-square rounded-lg"></div>
+              <div className="space-y-6">
+                <div className="h-8 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-6 bg-gray-200 rounded w-1/4"></div>
+                <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-12 bg-gray-200 rounded w-1/2 mt-6"></div>
               </div>
             </div>
           </div>
@@ -223,362 +253,408 @@ const ProductDetailPage = () => {
       </MainLayout>
     );
   }
-
+  
   if (!product) {
     return (
       <MainLayout>
-        <div className="container mx-auto py-12 px-4 text-center">
-          <h2 className="text-2xl font-bold mb-4">Product Not Found</h2>
-          <p className="mb-6">The product you're looking for does not exist or has been removed.</p>
+        <div className="container mx-auto px-4 py-12 text-center">
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Product Not Found</h1>
+          <p className="text-gray-600 mb-8">The product you're looking for doesn't exist or has been removed.</p>
           <Button asChild className="bg-amber-600 hover:bg-amber-700">
-            <Link to="/products">Back to Products</Link>
+            <Link to="/products">Browse All Products</Link>
           </Button>
         </div>
       </MainLayout>
     );
   }
-
+  
   return (
     <MainLayout>
-      <div className="container mx-auto py-12 px-4">
-        {/* Breadcrumb */}
-        <div className="mb-8">
-          <Link to="/products" className="text-amber-600 hover:text-amber-800 inline-flex items-center">
-            <ArrowLeft size={16} className="mr-2" />
-            Back to Products
-          </Link>
-        </div>
-
-        {/* Product Main Info */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-16">
+      <div className="container mx-auto px-4 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           {/* Product Image */}
-          <div className="bg-white p-4 rounded-lg shadow-sm border">
-            <img
-              src={product.image_url}
+          <div className="relative">
+            <img 
+              src={product.image_url || '/placeholder.svg'} 
               alt={product.name}
-              className="w-full h-auto rounded-md object-cover"
+              className="w-full h-auto rounded-lg shadow-sm"
             />
+            {product.sale_price && (
+              <Badge className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1">
+                Sale
+              </Badge>
+            )}
+            {product.featured && (
+              <Badge className="absolute top-4 right-4 bg-amber-500 text-white px-3 py-1">
+                Featured
+              </Badge>
+            )}
           </div>
-
-          {/* Product Details */}
-          <div>
-            <div className="mb-1 text-sm text-amber-600 font-medium uppercase">
-              {product.category}
-            </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h1>
-            
-            <div className="flex items-center mb-4">
-              <div className="flex text-amber-400">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    size={18}
-                    fill={i < Math.floor(product.rating) ? "currentColor" : "none"}
-                    className={i < Math.floor(product.rating) ? "text-amber-400" : "text-gray-300"}
-                  />
-                ))}
-              </div>
-              <span className="text-sm text-gray-500 ml-2">{product.rating} ({product.reviews?.length || 0} reviews)</span>
-            </div>
-            
-            <p className="text-gray-700 mb-6">{product.description}</p>
-            
-            <div className="flex items-baseline mb-6">
-              {product.sale_price ? (
+          
+          {/* Product Info */}
+          <div className="space-y-6">
+            {/* Breadcrumbs */}
+            <div className="flex items-center text-sm text-gray-500 mb-2">
+              <Link to="/" className="hover:text-amber-600">Home</Link>
+              <span className="mx-2">/</span>
+              <Link to="/products" className="hover:text-amber-600">Products</Link>
+              {product.category_id && (
                 <>
-                  <span className="text-2xl font-bold text-gray-900">${product.sale_price.toFixed(2)}</span>
-                  <span className="text-lg text-gray-500 line-through ml-3">${product.price.toFixed(2)}</span>
-                  <span className="ml-3 bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded">
-                    Save ${(product.price - product.sale_price).toFixed(2)}
-                  </span>
+                  <span className="mx-2">/</span>
+                  <span>{product.category_id}</span>
                 </>
-              ) : (
-                <span className="text-2xl font-bold text-gray-900">${product.price.toFixed(2)}</span>
               )}
             </div>
             
-            <div className="mb-6">
-              <p className="text-sm text-gray-600 mb-2">Quantity:</p>
-              <div className="flex items-center border rounded-md w-36">
-                <button
-                  onClick={decreaseQuantity}
-                  className="px-3 py-2 text-gray-600 hover:bg-gray-100 border-r"
+            <h1 className="text-3xl font-bold text-gray-900">{product.name}</h1>
+            
+            {/* Rating */}
+            <div className="flex items-center gap-1">
+              <div className="flex items-center text-amber-500">
+                {'★'.repeat(Math.round(product.rating))}
+                {'☆'.repeat(5 - Math.round(product.rating))}
+              </div>
+              <span className="text-gray-500 ml-1">({product.rating.toFixed(1)})</span>
+              <span className="text-gray-400 mx-2">|</span>
+              <span className="text-gray-500">{reviews.length} reviews</span>
+            </div>
+            
+            {/* Price */}
+            <div className="flex items-baseline gap-3">
+              {product.sale_price ? (
+                <>
+                  <span className="text-2xl font-bold text-amber-600">₹{product.sale_price}</span>
+                  <span className="text-lg text-gray-500 line-through">₹{product.price}</span>
+                </>
+              ) : (
+                <span className="text-2xl font-bold text-gray-900">₹{product.price}</span>
+              )}
+            </div>
+            
+            {/* Description */}
+            <p className="text-gray-600">{product.description}</p>
+            
+            {/* Details */}
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              {product.origin && (
+                <div>
+                  <span className="font-medium text-gray-700">Origin:</span> {product.origin}
+                </div>
+              )}
+              {product.shelf_life && (
+                <div>
+                  <span className="font-medium text-gray-700">Shelf Life:</span> {product.shelf_life}
+                </div>
+              )}
+              {product.weight && (
+                <div>
+                  <span className="font-medium text-gray-700">Weight:</span> {product.weight}
+                </div>
+              )}
+              {product.use_case && (
+                <div>
+                  <span className="font-medium text-gray-700">Use Case:</span> {product.use_case}
+                </div>
+              )}
+            </div>
+            
+            {/* Tags */}
+            {product.tags && product.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {product.tags.map((tag, index) => (
+                  <Badge key={index} variant="outline" className="bg-gray-50">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            
+            {/* Pack Size */}
+            {product.pack_sizes && product.pack_sizes.length > 0 && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Pack Size</label>
+                <Select
+                  value={selectedPackSize}
+                  onValueChange={setSelectedPackSize}
+                >
+                  <SelectTrigger className="w-full sm:w-48">
+                    <SelectValue placeholder="Select size" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {product.pack_sizes.map((size) => (
+                      <SelectItem key={size} value={size}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
+            {/* Quantity */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Quantity</label>
+              <div className="flex items-center">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handleQuantityChange(-1)}
                   disabled={quantity <= 1}
                 >
                   <Minus size={16} />
-                </button>
-                <input
-                  type="number"
-                  value={quantity}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    if (value > 0 && value <= (product.stock || 100)) {
-                      setQuantity(value);
-                    }
-                  }}
-                  className="w-full text-center border-none focus:ring-0 text-gray-700"
-                  min="1"
-                  max={product.stock}
-                />
-                <button
-                  onClick={increaseQuantity}
-                  className="px-3 py-2 text-gray-600 hover:bg-gray-100 border-l"
-                  disabled={quantity >= (product.stock || 100)}
+                </Button>
+                <span className="w-12 text-center">{quantity}</span>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handleQuantityChange(1)}
+                  disabled={quantity >= 20}
                 >
                   <Plus size={16} />
-                </button>
+                </Button>
               </div>
-              <p className="text-sm text-gray-500 mt-2">
-                {product.stock > 0 ? (
-                  <>
-                    <span className="text-green-600 font-medium">In Stock</span>
-                    {product.stock < 20 && ` - Only ${product.stock} left!`}
-                  </>
-                ) : (
-                  <span className="text-red-600 font-medium">Out of Stock</span>
-                )}
-              </p>
             </div>
             
-            <div className="flex flex-col sm:flex-row gap-4 mb-8">
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <Button
-                onClick={addToCart}
-                className="bg-amber-600 hover:bg-amber-700 flex-1"
-                size="lg"
-                disabled={!product.stock}
+                className="bg-amber-600 hover:bg-amber-700 flex-grow"
+                onClick={handleAddToCart}
+                disabled={addingToCart}
               >
-                <ShoppingCart className="mr-2" /> Add to Cart
+                <ShoppingCart className="mr-2 h-4 w-4" />
+                Add to Cart
               </Button>
+              
               <Button
-                onClick={addToWishlist}
                 variant="outline"
-                size="lg"
-                className="border-amber-600 text-amber-600 hover:bg-amber-50"
+                className={`flex-grow ${inWishlist ? 'text-red-500 border-red-500 hover:bg-red-50' : ''}`}
+                onClick={toggleWishlist}
+                disabled={wishlistLoading}
               >
-                <Heart className="mr-2" /> Wishlist
+                <Heart className={`mr-2 h-4 w-4 ${inWishlist ? 'fill-red-500' : ''}`} />
+                {inWishlist ? 'In Wishlist' : 'Add to Wishlist'}
               </Button>
             </div>
             
-            {/* Product Benefits */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-gray-200 pt-6">
-              <div className="flex items-start">
-                <div className="mr-3 text-amber-600">
-                  <Truck size={20} />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Free Shipping</p>
-                  <p className="text-xs text-gray-500">On orders over $50</p>
-                </div>
+            {/* Benefits */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 text-sm">
+              <div className="flex items-center">
+                <PackageCheck className="mr-2 h-5 w-5 text-amber-600" />
+                <span className="text-gray-700">Premium Quality</span>
               </div>
-              <div className="flex items-start">
-                <div className="mr-3 text-amber-600">
-                  <ShieldCheck size={20} />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Satisfaction Guaranteed</p>
-                  <p className="text-xs text-gray-500">30-day money-back guarantee</p>
-                </div>
+              <div className="flex items-center">
+                <Truck className="mr-2 h-5 w-5 text-amber-600" />
+                <span className="text-gray-700">Fast Delivery</span>
               </div>
-              <div className="flex items-start">
-                <div className="mr-3 text-amber-600">
-                  <RotateCcw size={20} />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Easy Returns</p>
-                  <p className="text-xs text-gray-500">Hassle-free return policy</p>
-                </div>
-              </div>
-              <div className="flex items-start">
-                <div className="mr-3 text-amber-600">
-                  <Share2 size={20} />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Share Product</p>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <button className="text-gray-600 hover:text-amber-600">
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path fillRule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" clipRule="evenodd"></path>
-                      </svg>
-                    </button>
-                    <button className="text-gray-600 hover:text-amber-600">
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84"></path>
-                      </svg>
-                    </button>
-                    <button className="text-gray-600 hover:text-amber-600">
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path fillRule="evenodd" d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.067.048-1.407.06-4.123.06h-.08c-2.643 0-2.987-.012-4.043-.06-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.047-1.024-.06-1.379-.06-3.808v-.63c0-2.43.013-2.784.06-3.808.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 015.45 2.525c.636-.247 1.363-.416 2.427-.465C8.901 2.013 9.256 2 11.685 2h.63zm-.081 1.802h-.468c-2.456 0-2.784.011-3.807.058-.975.045-1.504.207-1.857.344-.467.182-.8.398-1.15.748-.35.35-.566.683-.748 1.15-.137.353-.3.882-.344 1.857-.047 1.023-.058 1.351-.058 3.807v.468c0 2.456.011 2.784.058 3.807.045.975.207 1.504.344 1.857.182.466.399.8.748 1.15.35.35.683.566 1.15.748.353.137.882.3 1.857.344 1.054.048 1.37.058 4.041.058h.08c2.597 0 2.917-.01 3.96-.058.976-.045 1.505-.207 1.858-.344.466-.182.8-.398 1.15-.748.35-.35.566-.683.748-1.15.137-.353.3-.882.344-1.857.048-1.055.058-1.37.058-4.041v-.08c0-2.597-.01-2.917-.058-3.96-.045-.976-.207-1.505-.344-1.858a3.097 3.097 0 00-.748-1.15 3.098 3.098 0 00-1.15-.748c-.353-.137-.882-.3-1.857-.344-1.023-.047-1.351-.058-3.807-.058zM12 6.865a5.135 5.135 0 110 10.27 5.135 5.135 0 010-10.27zm0 1.802a3.333 3.333 0 100 6.666 3.333 3.333 0 000-6.666zm5.338-3.205a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z" clipRule="evenodd"></path>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
+              <div className="flex items-center">
+                <RefreshCw className="mr-2 h-5 w-5 text-amber-600" />
+                <span className="text-gray-700">Easy Returns</span>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Product Tabs */}
-        <div className="mb-16">
-          <Tabs defaultValue="details" className="max-w-3xl mx-auto">
+        
+        {/* Product Details Tabs */}
+        <div className="mt-16">
+          <Tabs defaultValue="description">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="ingredients">Ingredients</TabsTrigger>
-              <TabsTrigger value="reviews">Reviews</TabsTrigger>
+              <TabsTrigger value="description">Description</TabsTrigger>
+              <TabsTrigger value="additional">Additional Info</TabsTrigger>
+              <TabsTrigger value="reviews">Reviews ({reviews.length})</TabsTrigger>
             </TabsList>
-            <TabsContent value="details" className="mt-6 bg-white p-6 rounded-md shadow-sm border">
-              <h3 className="text-lg font-semibold mb-3">Product Details</h3>
-              <div className="prose max-w-none">
-                <p className="whitespace-pre-line">{product.details}</p>
-              </div>
+            <TabsContent value="description" className="mt-6">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="prose max-w-none">
+                    <h3 className="text-xl font-semibold mb-4">Product Description</h3>
+                    <p>{product.description}</p>
+                    
+                    {product.use_case && (
+                      <>
+                        <h4 className="text-lg font-semibold mt-4 mb-2">Uses</h4>
+                        <p>{product.use_case}</p>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
-            <TabsContent value="ingredients" className="mt-6 bg-white p-6 rounded-md shadow-sm border">
-              <h3 className="text-lg font-semibold mb-3">Ingredients</h3>
-              <div className="prose max-w-none">
-                <p>{product.ingredients}</p>
-                <div className="mt-4">
-                  <h4 className="text-md font-medium mb-2">Usage Instructions</h4>
-                  <p>{product.usage}</p>
-                </div>
-              </div>
+            <TabsContent value="additional" className="mt-6">
+              <Card>
+                <CardContent className="pt-6">
+                  <h3 className="text-xl font-semibold mb-4">Additional Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex flex-col space-y-4">
+                      {product.weight && (
+                        <div className="grid grid-cols-2 border-b pb-2">
+                          <span className="font-medium">Weight</span>
+                          <span>{product.weight}</span>
+                        </div>
+                      )}
+                      {product.origin && (
+                        <div className="grid grid-cols-2 border-b pb-2">
+                          <span className="font-medium">Origin</span>
+                          <span>{product.origin}</span>
+                        </div>
+                      )}
+                      {product.shelf_life && (
+                        <div className="grid grid-cols-2 border-b pb-2">
+                          <span className="font-medium">Shelf Life</span>
+                          <span>{product.shelf_life}</span>
+                        </div>
+                      )}
+                      {product.is_gift_suitable !== undefined && (
+                        <div className="grid grid-cols-2 border-b pb-2">
+                          <span className="font-medium">Gift Suitable</span>
+                          <span>{product.is_gift_suitable ? 'Yes' : 'No'}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col space-y-4">
+                      {product.is_bulk_available !== undefined && (
+                        <div className="grid grid-cols-2 border-b pb-2">
+                          <span className="font-medium">Bulk Available</span>
+                          <span>{product.is_bulk_available ? 'Yes' : 'No'}</span>
+                        </div>
+                      )}
+                      {product.pack_sizes && (
+                        <div className="grid grid-cols-2 border-b pb-2">
+                          <span className="font-medium">Available Sizes</span>
+                          <span>{product.pack_sizes.join(', ')}</span>
+                        </div>
+                      )}
+                      {product.hs_code && (
+                        <div className="grid grid-cols-2 border-b pb-2">
+                          <span className="font-medium">HS Code</span>
+                          <span>{product.hs_code}</span>
+                        </div>
+                      )}
+                      {product.sourcing && (
+                        <div className="grid grid-cols-2 border-b pb-2">
+                          <span className="font-medium">Sourcing</span>
+                          <span>{product.sourcing}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
             <TabsContent value="reviews" className="mt-6">
-              <div className="bg-white p-6 rounded-md shadow-sm border mb-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold">Customer Reviews</h3>
-                  <Button className="bg-amber-600 hover:bg-amber-700">Write a Review</Button>
-                </div>
-                
-                <div className="mb-6 flex items-center">
-                  <div className="mr-4">
-                    <div className="text-3xl font-bold text-gray-900">{product.rating.toFixed(1)}</div>
-                    <div className="flex text-amber-400 mt-1">
-                      {[...Array(5)].map((_, i) => (
-                        <Star
-                          key={i}
-                          size={14}
-                          fill={i < Math.floor(product.rating) ? "currentColor" : "none"}
-                          className={i < Math.floor(product.rating) ? "text-amber-400" : "text-gray-300"}
-                        />
-                      ))}
-                    </div>
-                    <div className="text-sm text-gray-500 mt-1">{product.reviews?.length || 0} reviews</div>
-                  </div>
+              <Card>
+                <CardContent className="pt-6">
+                  <h3 className="text-xl font-semibold mb-4">Customer Reviews</h3>
                   
-                  <div className="flex-1">
-                    {[5, 4, 3, 2, 1].map((star) => {
-                      const reviewCount = product.reviews?.filter((r) => Math.floor(r.rating) === star).length || 0;
-                      const percentage = product.reviews?.length ? (reviewCount / product.reviews.length) * 100 : 0;
-                      
-                      return (
-                        <div key={star} className="flex items-center text-sm mb-1">
-                          <div className="w-8 text-gray-700">{star} star</div>
-                          <div className="w-full max-w-xs mx-3 bg-gray-200 rounded-full h-2.5">
-                            <div className="bg-amber-400 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
-                          </div>
-                          <div className="w-9 text-gray-500">{percentage.toFixed(0)}%</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                <div className="border-t border-gray-200 pt-6">
-                  {product.reviews && product.reviews.length > 0 ? (
+                  {/* Write a Review */}
+                  {user ? (
+                    <div className="mb-8 p-4 bg-gray-50 rounded-lg">
+                      <h4 className="text-lg font-medium mb-4">Write a Review</h4>
+                      <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onReviewSubmit)} className="space-y-4">
+                          <FormField
+                            control={form.control}
+                            name="rating"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Rating</FormLabel>
+                                <FormControl>
+                                  <div className="flex gap-1">
+                                    {[1, 2, 3, 4, 5].map((rating) => (
+                                      <button
+                                        key={rating}
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedRating(rating);
+                                          field.onChange(rating);
+                                        }}
+                                        className="text-2xl focus:outline-none"
+                                      >
+                                        <Star 
+                                          className={`w-8 h-8 ${rating <= selectedRating ? 'text-amber-500 fill-amber-500' : 'text-gray-300'}`} 
+                                        />
+                                      </button>
+                                    ))}
+                                  </div>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={form.control}
+                            name="comment"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Your Review</FormLabel>
+                                <FormControl>
+                                  <Textarea 
+                                    placeholder="Share your experience with this product..."
+                                    className="resize-none"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <Button 
+                            type="submit" 
+                            className="bg-amber-600 hover:bg-amber-700"
+                            disabled={addingReview}
+                          >
+                            Submit Review
+                          </Button>
+                        </form>
+                      </Form>
+                    </div>
+                  ) : (
+                    <div className="mb-8 p-4 bg-gray-50 rounded-lg text-center">
+                      <p className="mb-4">Please sign in to leave a review</p>
+                      <Button asChild>
+                        <Link to="/login">Sign In</Link>
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* Reviews List */}
+                  {reviews.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">No reviews yet. Be the first to review this product!</p>
+                    </div>
+                  ) : (
                     <div className="space-y-6">
-                      {product.reviews.map((review) => (
-                        <div key={review.id} className="border-b border-gray-200 pb-6 last:border-b-0 last:pb-0">
-                          <div className="flex items-start mb-3">
-                            <img
-                              src={review.avatar}
-                              alt={review.user}
-                              className="w-10 h-10 rounded-full mr-3"
-                            />
-                            <div>
-                              <div className="font-medium text-gray-900">{review.user}</div>
-                              <div className="flex items-center mt-1">
-                                <div className="flex text-amber-400 mr-2">
-                                  {[...Array(5)].map((_, i) => (
-                                    <Star
-                                      key={i}
-                                      size={14}
-                                      fill={i < review.rating ? "currentColor" : "none"}
-                                      className={i < review.rating ? "text-amber-400" : "text-gray-300"}
-                                    />
-                                  ))}
-                                </div>
-                                <div className="text-xs text-gray-500">{review.date}</div>
-                              </div>
+                      {reviews.map((review) => (
+                        <div key={review.id} className="border-b pb-4 mb-4 last:border-0">
+                          <div className="flex justify-between mb-2">
+                            <div className="flex items-center gap-1 text-amber-500">
+                              {'★'.repeat(review.rating)}
+                              {'☆'.repeat(5 - review.rating)}
                             </div>
+                            <span className="text-sm text-gray-500">
+                              {format(new Date(review.created_at), 'MMM d, yyyy')}
+                            </span>
                           </div>
                           <p className="text-gray-700">{review.comment}</p>
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">No reviews yet. Be the first to review this product!</p>
-                    </div>
                   )}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </div>
-
+        
         {/* Related Products */}
         {relatedProducts.length > 0 && (
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">You May Also Like</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-              {relatedProducts.map((relatedProduct) => (
-                <div key={relatedProduct.id} className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-200 group">
-                  <div className="relative">
-                    <Link to={`/products/${relatedProduct.id}`}>
-                      <img
-                        src={relatedProduct.image_url}
-                        alt={relatedProduct.name}
-                        className="w-full h-40 object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    </Link>
-                    
-                    {relatedProduct.sale_price && (
-                      <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
-                        Sale
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="p-4">
-                    <Link to={`/products/${relatedProduct.id}`}>
-                      <h3 className="text-lg font-semibold text-gray-900 hover:text-amber-600 transition-colors mb-1">
-                        {relatedProduct.name}
-                      </h3>
-                    </Link>
-                    <div className="flex items-center mb-2">
-                      <div className="flex text-amber-400">
-                        {[...Array(5)].map((_, i) => (
-                          <span key={i}>
-                            {i < Math.floor(relatedProduct.rating) ? "★" : (i < relatedProduct.rating ? "★" : "☆")}
-                          </span>
-                        ))}
-                      </div>
-                      <span className="text-xs text-gray-500 ml-1">({relatedProduct.rating})</span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-baseline">
-                        {relatedProduct.sale_price ? (
-                          <>
-                            <span className="text-lg font-bold text-gray-900">${relatedProduct.sale_price.toFixed(2)}</span>
-                            <span className="text-sm text-gray-500 line-through ml-2">${relatedProduct.price.toFixed(2)}</span>
-                          </>
-                        ) : (
-                          <span className="text-lg font-bold text-gray-900">${relatedProduct.price.toFixed(2)}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+          <div className="mt-16">
+            <h2 className="text-2xl font-bold text-gray-900 mb-8">Related Products</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {relatedProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
               ))}
             </div>
           </div>
