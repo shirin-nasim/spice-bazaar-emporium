@@ -233,7 +233,7 @@ export async function addAdmin(email: string): Promise<AdminUser | null> {
     return null;
   }
   
-  const user = users.find(u => u.email === email);
+  const user = users.find(u => u.email && u.email === email);
   
   if (!user) {
     console.error('User not found with email:', email);
