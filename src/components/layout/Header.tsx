@@ -1,13 +1,18 @@
+
 import { ShoppingCart, User, Menu, Phone, Mail, X, ChevronDown, Heart, LogOut } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { SearchBar } from "@/components/search/SearchBar";
+import { CurrencySelector } from "./CurrencySelector";
+import { LanguageSelector } from "./LanguageSelector";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isPromoBarVisible, setIsPromoBarVisible] = useState(true);
+  const [selectedCurrency, setSelectedCurrency] = useState("INR");
+  const [selectedLanguage, setSelectedLanguage] = useState("EN");
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -137,59 +142,66 @@ const Header = () => {
           </nav>
 
           {/* Right Side Icons */}
-          <div className="flex items-center space-x-4">
-            <div className="hidden md:flex items-center">
-              <span className="text-gray-800 font-medium flex items-center">
-                INR <ChevronDown size={16} className="ml-1" />
-              </span>
+          <div className="flex items-center space-x-3">
+            <div className="hidden md:flex items-center border-r border-gray-200 pr-3">
+              <CurrencySelector 
+                value={selectedCurrency} 
+                onValueChange={setSelectedCurrency} 
+              />
             </div>
+            
             <button className="text-gray-800 hidden md:block">
               <div className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center">
                 <span className="text-amber-800">☀</span>
               </div>
             </button>
-            <div className="hidden md:flex items-center">
-              <span className="text-gray-800 font-medium flex items-center">
-                <span className="mr-1">🇺🇸</span> EN <ChevronDown size={16} className="ml-1" />
-              </span>
+            
+            <div className="hidden md:flex items-center border-l border-gray-200 pl-3">
+              <LanguageSelector 
+                value={selectedLanguage} 
+                onValueChange={setSelectedLanguage} 
+              />
             </div>
-            <Link to="/wishlist" className="text-gray-800 hover:text-amber-600 hidden md:block">
-              <Heart size={22} />
-            </Link>
-            <Link to="/cart" className="text-gray-800 hover:text-amber-600">
-              <ShoppingCart size={22} />
-            </Link>
             
-            {user ? (
-              <div className="relative group hidden md:block">
-                <button className="flex items-center text-amber-600 font-medium">
-                  <User size={22} className="mr-1" />
-                  <span className="hidden lg:inline">Account</span>
-                  <ChevronDown size={16} className="ml-1" />
-                </button>
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                  <Link to="/profile" className="block px-4 py-2 text-gray-800 hover:bg-amber-50">My Profile</Link>
-                  <Link to="/orders" className="block px-4 py-2 text-gray-800 hover:bg-amber-50">My Orders</Link>
-                  <button 
-                    onClick={handleSignOut}
-                    className="w-full text-left px-4 py-2 text-gray-800 hover:bg-amber-50 flex items-center"
-                  >
-                    <LogOut size={16} className="mr-2" /> Sign Out
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <Link to="/login" className="text-amber-600 font-medium hidden md:block">
-                Sign In
+            <div className="flex items-center space-x-3 border-l border-gray-200 pl-3">
+              <Link to="/wishlist" className="text-gray-800 hover:text-amber-600 hidden md:block">
+                <Heart size={22} />
               </Link>
-            )}
-            
-            <button 
-              className="md:hidden text-gray-800 hover:text-amber-600"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-            >
-              <Menu size={22} />
-            </button>
+              <Link to="/cart" className="text-gray-800 hover:text-amber-600">
+                <ShoppingCart size={22} />
+              </Link>
+              
+              {user ? (
+                <div className="relative group hidden md:block">
+                  <button className="flex items-center text-amber-600 font-medium">
+                    <User size={22} className="mr-1" />
+                    <span className="hidden lg:inline">Account</span>
+                    <ChevronDown size={16} className="ml-1" />
+                  </button>
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                    <Link to="/profile" className="block px-4 py-2 text-gray-800 hover:bg-amber-50">My Profile</Link>
+                    <Link to="/orders" className="block px-4 py-2 text-gray-800 hover:bg-amber-50">My Orders</Link>
+                    <button 
+                      onClick={handleSignOut}
+                      className="w-full text-left px-4 py-2 text-gray-800 hover:bg-amber-50 flex items-center"
+                    >
+                      <LogOut size={16} className="mr-2" /> Sign Out
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <Link to="/login" className="text-amber-600 font-medium hidden md:block">
+                  Sign In
+                </Link>
+              )}
+              
+              <button 
+                className="md:hidden text-gray-800 hover:text-amber-600"
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+              >
+                <Menu size={22} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -272,14 +284,22 @@ const Header = () => {
               
               <div className="flex justify-between pt-2 border-t border-gray-200">
                 <div className="flex items-center">
-                  <span className="text-gray-800 font-medium flex items-center">
-                    <span className="mr-1">🇺🇸</span> EN <ChevronDown size={16} className="ml-1" />
-                  </span>
+                  <LanguageSelector
+                    value={selectedLanguage}
+                    onValueChange={(value) => {
+                      setSelectedLanguage(value);
+                      setIsMenuOpen(false);
+                    }}
+                  />
                 </div>
                 <div className="flex items-center">
-                  <span className="text-gray-800 font-medium flex items-center">
-                    INR <ChevronDown size={16} className="ml-1" />
-                  </span>
+                  <CurrencySelector
+                    value={selectedCurrency}
+                    onValueChange={(value) => {
+                      setSelectedCurrency(value);
+                      setIsMenuOpen(false);
+                    }}
+                  />
                 </div>
               </div>
             </nav>

@@ -228,14 +228,23 @@ export async function addAdmin(email: string): Promise<AdminUser | null> {
   // First check if user exists in auth
   const { data: { users } = { users: [] }, error: userError } = await supabase.auth.admin.listUsers();
   
-  if (userError || !users) {
+  if (userError) {
     console.error('Error finding users:', userError);
     return null;
   }
   
-  const user = users.find(u => u.email && u.email === email);
+  // Type assertion to handle possible undefined users
+  const safeUsers = users || [];
   
-  if (!user) {
+  // Find user with matching email
+  const user = safeUsers.find(u => {
+    if (typeof u === 'object' && u !== null && 'email' in u) {
+      return u.email === email;
+    }
+    return false;
+  });
+  
+  if (!user || !('id' in user)) {
     console.error('User not found with email:', email);
     return null;
   }
