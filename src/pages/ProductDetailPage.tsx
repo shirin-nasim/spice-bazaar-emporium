@@ -27,7 +27,9 @@ import {
   PackageCheck, 
   Truck, 
   RefreshCw, 
-  Check 
+  Check,
+  Gift,
+  Users
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useForm } from 'react-hook-form';
@@ -36,10 +38,30 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 
 const reviewSchema = z.object({
   rating: z.number().min(1).max(5),
   comment: z.string().min(5, "Comment must be at least 5 characters").max(500)
+});
+
+const bulkOrderSchema = z.object({
+  quantity: z.number().min(10, "Bulk orders must be at least 10 units"),
+  packSize: z.string().min(1, "Please select a pack size"),
+  companyName: z.string().min(2, "Company name is required"),
+  email: z.string().email("Please enter a valid email"),
+  phone: z.string().min(10, "Please enter a valid phone number"),
+  message: z.string().optional()
+});
+
+const giftSchema = z.object({
+  quantity: z.number().min(1, "Please select at least 1 unit"),
+  packSize: z.string().min(1, "Please select a pack size"),
+  recipientName: z.string().min(2, "Recipient name is required"),
+  recipientEmail: z.string().email("Please enter a valid email"),
+  message: z.string().optional(),
+  giftWrap: z.boolean().default(true)
 });
 
 const ProductDetailPage = () => {
@@ -58,12 +80,39 @@ const ProductDetailPage = () => {
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [addingReview, setAddingReview] = useState(false);
   const [selectedRating, setSelectedRating] = useState(5);
+  const [isBulkOrderOpen, setIsBulkOrderOpen] = useState(false);
+  const [isGiftOpen, setIsGiftOpen] = useState(false);
+  const [calculatedPrice, setCalculatedPrice] = useState<number>(0);
   
   const form = useForm<z.infer<typeof reviewSchema>>({
     resolver: zodResolver(reviewSchema),
     defaultValues: {
       rating: 5,
       comment: ""
+    }
+  });
+
+  const bulkOrderForm = useForm<z.infer<typeof bulkOrderSchema>>({
+    resolver: zodResolver(bulkOrderSchema),
+    defaultValues: {
+      quantity: 10,
+      packSize: '',
+      companyName: '',
+      email: '',
+      phone: '',
+      message: ''
+    }
+  });
+
+  const giftForm = useForm<z.infer<typeof giftSchema>>({
+    resolver: zodResolver(giftSchema),
+    defaultValues: {
+      quantity: 1,
+      packSize: '',
+      recipientName: '',
+      recipientEmail: '',
+      message: '',
+      giftWrap: true
     }
   });
   
@@ -83,6 +132,10 @@ const ProductDetailPage = () => {
         
         setProduct(productData);
         setSelectedPackSize(productData.pack_sizes?.[0] || '');
+        
+        // Set initial calculated price
+        const initialPrice = productData.sale_price || productData.price;
+        setCalculatedPrice(initialPrice);
         
         // Fetch reviews
         const reviewsData = await getProductReviews(productData.id);
@@ -109,6 +162,25 @@ const ProductDetailPage = () => {
     
     fetchProductDetails();
   }, [slug, user]);
+  
+  // Calculate price based on quantity and apply any volume discounts
+  useEffect(() => {
+    if (!product) return;
+    
+    let basePrice = product.sale_price || product.price;
+    let finalPrice = basePrice * quantity;
+    
+    // Apply volume discounts if quantity >= 5
+    if (quantity >= 20) {
+      finalPrice = finalPrice * 0.85; // 15% discount for 20+ items
+    } else if (quantity >= 10) {
+      finalPrice = finalPrice * 0.9; // 10% discount for 10+ items
+    } else if (quantity >= 5) {
+      finalPrice = finalPrice * 0.95; // 5% discount for 5+ items
+    }
+    
+    setCalculatedPrice(finalPrice);
+  }, [quantity, product]);
   
   const handleQuantityChange = (change: number) => {
     const newQuantity = quantity + change;
@@ -231,6 +303,52 @@ const ProductDetailPage = () => {
       setAddingReview(false);
     }
   };
+
+  const onBulkOrderSubmit = async (data: z.infer<typeof bulkOrderSchema>) => {
+    if (!product) return;
+    
+    try {
+      // Here you would integrate with your backend to process the bulk order
+      console.log('Bulk order submitted:', data);
+      
+      toast({
+        title: 'Bulk Order Requested',
+        description: 'Your bulk order request has been submitted. Our team will contact you shortly.',
+      });
+      
+      bulkOrderForm.reset();
+      setIsBulkOrderOpen(false);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to submit bulk order request',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const onGiftSubmit = async (data: z.infer<typeof giftSchema>) => {
+    if (!product) return;
+    
+    try {
+      // Here you would integrate with your backend to process the gift order
+      console.log('Gift order submitted:', data);
+      
+      toast({
+        title: 'Gift Order Placed',
+        description: 'Your gift order has been placed successfully!',
+      });
+      
+      giftForm.reset();
+      setIsGiftOpen(false);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to submit gift order',
+        variant: 'destructive',
+      });
+    }
+  };
   
   if (loading) {
     return (
@@ -271,199 +389,484 @@ const ProductDetailPage = () => {
   return (
     <MainLayout>
       <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-          {/* Product Image */}
-          <div className="relative">
-            <img 
-              src={product.image_url || '/placeholder.svg'} 
-              alt={product.name}
-              className="w-full h-auto rounded-lg shadow-sm"
-            />
-            {product.sale_price && (
-              <Badge className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1">
-                Sale
-              </Badge>
-            )}
-            {product.featured && (
-              <Badge className="absolute top-4 right-4 bg-amber-500 text-white px-3 py-1">
-                Featured
-              </Badge>
-            )}
-          </div>
-          
-          {/* Product Info */}
-          <div className="space-y-6">
-            {/* Breadcrumbs */}
-            <div className="flex items-center text-sm text-gray-500 mb-2">
-              <Link to="/" className="hover:text-amber-600">Home</Link>
-              <span className="mx-2">/</span>
-              <Link to="/products" className="hover:text-amber-600">Products</Link>
-              {product.category_id && (
-                <>
-                  <span className="mx-2">/</span>
-                  <span>{product.category_id}</span>
-                </>
+        {/* Product Details */}
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden p-6 mb-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+            {/* Product Image */}
+            <div className="relative">
+              <img 
+                src={product.image_url || '/placeholder.svg'} 
+                alt={product.name}
+                className="w-full h-auto rounded-lg shadow-sm object-cover aspect-square"
+              />
+              {product.sale_price && (
+                <Badge className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1">
+                  Sale
+                </Badge>
+              )}
+              {product.featured && (
+                <Badge className="absolute top-4 right-4 bg-amber-500 text-white px-3 py-1">
+                  Featured
+                </Badge>
               )}
             </div>
             
-            <h1 className="text-3xl font-bold text-gray-900">{product.name}</h1>
-            
-            {/* Rating */}
-            <div className="flex items-center gap-1">
-              <div className="flex items-center text-amber-500">
-                {'★'.repeat(Math.round(product.rating))}
-                {'☆'.repeat(5 - Math.round(product.rating))}
+            {/* Product Info */}
+            <div className="space-y-6">
+              {/* Breadcrumbs */}
+              <div className="flex items-center text-sm text-gray-500 mb-2">
+                <Link to="/" className="hover:text-amber-600">Home</Link>
+                <span className="mx-2">/</span>
+                <Link to="/products" className="hover:text-amber-600">Products</Link>
+                {product.category_id && (
+                  <>
+                    <span className="mx-2">/</span>
+                    <span>{product.category_id}</span>
+                  </>
+                )}
               </div>
-              <span className="text-gray-500 ml-1">({product.rating.toFixed(1)})</span>
-              <span className="text-gray-400 mx-2">|</span>
-              <span className="text-gray-500">{reviews.length} reviews</span>
-            </div>
-            
-            {/* Price */}
-            <div className="flex items-baseline gap-3">
-              {product.sale_price ? (
-                <>
-                  <span className="text-2xl font-bold text-amber-600">₹{product.sale_price}</span>
-                  <span className="text-lg text-gray-500 line-through">₹{product.price}</span>
-                </>
-              ) : (
-                <span className="text-2xl font-bold text-gray-900">₹{product.price}</span>
-              )}
-            </div>
-            
-            {/* Description */}
-            <p className="text-gray-600">{product.description}</p>
-            
-            {/* Details */}
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              {product.origin && (
-                <div>
-                  <span className="font-medium text-gray-700">Origin:</span> {product.origin}
-                </div>
-              )}
-              {product.shelf_life && (
-                <div>
-                  <span className="font-medium text-gray-700">Shelf Life:</span> {product.shelf_life}
-                </div>
-              )}
-              {product.weight && (
-                <div>
-                  <span className="font-medium text-gray-700">Weight:</span> {product.weight}
-                </div>
-              )}
-              {product.use_case && (
-                <div>
-                  <span className="font-medium text-gray-700">Use Case:</span> {product.use_case}
-                </div>
-              )}
-            </div>
-            
-            {/* Tags */}
-            {product.tags && product.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {product.tags.map((tag, index) => (
-                  <Badge key={index} variant="outline" className="bg-gray-50">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            )}
-            
-            {/* Pack Size */}
-            {product.pack_sizes && product.pack_sizes.length > 0 && (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Pack Size</label>
-                <Select
-                  value={selectedPackSize}
-                  onValueChange={setSelectedPackSize}
-                >
-                  <SelectTrigger className="w-full sm:w-48">
-                    <SelectValue placeholder="Select size" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {product.pack_sizes.map((size) => (
-                      <SelectItem key={size} value={size}>
-                        {size}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            
-            {/* Quantity */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Quantity</label>
-              <div className="flex items-center">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleQuantityChange(-1)}
-                  disabled={quantity <= 1}
-                >
-                  <Minus size={16} />
-                </Button>
-                <span className="w-12 text-center">{quantity}</span>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleQuantityChange(1)}
-                  disabled={quantity >= 20}
-                >
-                  <Plus size={16} />
-                </Button>
-              </div>
-            </div>
-            
-            {/* Actions */}
-            <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <Button
-                className="bg-amber-600 hover:bg-amber-700 flex-grow"
-                onClick={handleAddToCart}
-                disabled={addingToCart}
-              >
-                <ShoppingCart className="mr-2 h-4 w-4" />
-                Add to Cart
-              </Button>
               
-              <Button
-                variant="outline"
-                className={`flex-grow ${inWishlist ? 'text-red-500 border-red-500 hover:bg-red-50' : ''}`}
-                onClick={toggleWishlist}
-                disabled={wishlistLoading}
-              >
-                <Heart className={`mr-2 h-4 w-4 ${inWishlist ? 'fill-red-500' : ''}`} />
-                {inWishlist ? 'In Wishlist' : 'Add to Wishlist'}
-              </Button>
-            </div>
-            
-            {/* Benefits */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 text-sm">
-              <div className="flex items-center">
-                <PackageCheck className="mr-2 h-5 w-5 text-amber-600" />
-                <span className="text-gray-700">Premium Quality</span>
+              <h1 className="text-3xl font-bold text-gray-900">{product.name}</h1>
+              
+              {/* Rating */}
+              <div className="flex items-center gap-1">
+                <div className="flex items-center text-amber-500">
+                  {'★'.repeat(Math.round(product.rating))}
+                  {'☆'.repeat(5 - Math.round(product.rating))}
+                </div>
+                <span className="text-gray-500 ml-1">({product.rating.toFixed(1)})</span>
+                <span className="text-gray-400 mx-2">|</span>
+                <span className="text-gray-500">{reviews.length} reviews</span>
               </div>
-              <div className="flex items-center">
-                <Truck className="mr-2 h-5 w-5 text-amber-600" />
-                <span className="text-gray-700">Fast Delivery</span>
+              
+              {/* Price */}
+              <div className="flex items-baseline gap-3">
+                <span className="text-2xl font-bold text-amber-600">₹{calculatedPrice.toFixed(2)}</span>
+                {quantity > 4 && (
+                  <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50">
+                    Volume Discount Applied
+                  </Badge>
+                )}
               </div>
-              <div className="flex items-center">
-                <RefreshCw className="mr-2 h-5 w-5 text-amber-600" />
-                <span className="text-gray-700">Easy Returns</span>
+              
+              {/* Original Price Info */}
+              {product.sale_price ? (
+                <div className="text-sm text-gray-500">
+                  Regular price: <span className="line-through">₹{product.price}</span>
+                  <span className="ml-2 text-green-600">Save {Math.round((1 - product.sale_price/product.price) * 100)}%</span>
+                </div>
+              ) : null}
+              
+              {/* Description */}
+              <p className="text-gray-600">{product.description}</p>
+              
+              {/* Details */}
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                {product.origin && (
+                  <div>
+                    <span className="font-medium text-gray-700">Origin:</span> {product.origin}
+                  </div>
+                )}
+                {product.shelf_life && (
+                  <div>
+                    <span className="font-medium text-gray-700">Shelf Life:</span> {product.shelf_life}
+                  </div>
+                )}
+                {product.weight && (
+                  <div>
+                    <span className="font-medium text-gray-700">Weight:</span> {product.weight}
+                  </div>
+                )}
+                {product.use_case && (
+                  <div>
+                    <span className="font-medium text-gray-700">Use Case:</span> {product.use_case}
+                  </div>
+                )}
+              </div>
+              
+              {/* Tags */}
+              {product.tags && product.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {product.tags.map((tag, index) => (
+                    <Badge key={index} variant="outline" className="bg-gray-50">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              
+              {/* Pack Size */}
+              {product.pack_sizes && product.pack_sizes.length > 0 && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Pack Size</label>
+                  <Select
+                    value={selectedPackSize}
+                    onValueChange={setSelectedPackSize}
+                  >
+                    <SelectTrigger className="w-full sm:w-48">
+                      <SelectValue placeholder="Select size" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {product.pack_sizes.map((size) => (
+                        <SelectItem key={size} value={size}>
+                          {size}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              
+              {/* Quantity */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Quantity</label>
+                <div className="flex items-center">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handleQuantityChange(-1)}
+                    disabled={quantity <= 1}
+                  >
+                    <Minus size={16} />
+                  </Button>
+                  <span className="w-12 text-center">{quantity}</span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handleQuantityChange(1)}
+                    disabled={quantity >= 20}
+                  >
+                    <Plus size={16} />
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Actions */}
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <Button
+                  className="bg-amber-600 hover:bg-amber-700 flex-grow"
+                  onClick={handleAddToCart}
+                  disabled={addingToCart}
+                >
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  Add to Cart
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  className={`flex-grow ${inWishlist ? 'text-red-500 border-red-500 hover:bg-red-50' : ''}`}
+                  onClick={toggleWishlist}
+                  disabled={wishlistLoading}
+                >
+                  <Heart className={`mr-2 h-4 w-4 ${inWishlist ? 'fill-red-500' : ''}`} />
+                  {inWishlist ? 'In Wishlist' : 'Add to Wishlist'}
+                </Button>
+              </div>
+
+              {/* Bulk & Gift options */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                {product.is_bulk_available && (
+                  <Dialog open={isBulkOrderOpen} onOpenChange={setIsBulkOrderOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="w-full text-blue-600 border-blue-200 hover:bg-blue-50">
+                        <Users className="mr-2 h-4 w-4" />
+                        Bulk Order Inquiry
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Request Bulk Order</DialogTitle>
+                        <DialogDescription>
+                          Fill out the form below to request pricing for bulk orders of {product.name}.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <Form {...bulkOrderForm}>
+                        <form onSubmit={bulkOrderForm.handleSubmit(onBulkOrderSubmit)} className="space-y-4">
+                          <FormField
+                            control={bulkOrderForm.control}
+                            name="quantity"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Quantity</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="number" 
+                                    min="10"
+                                    {...field}
+                                    onChange={(e) => field.onChange(parseInt(e.target.value))}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={bulkOrderForm.control}
+                            name="packSize"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Pack Size</FormLabel>
+                                <Select
+                                  value={field.value}
+                                  onValueChange={field.onChange}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select a pack size" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {product.pack_sizes?.map((size) => (
+                                      <SelectItem key={size} value={size}>
+                                        {size}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={bulkOrderForm.control}
+                            name="companyName"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Company Name</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <FormField
+                              control={bulkOrderForm.control}
+                              name="email"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Email</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={bulkOrderForm.control}
+                              name="phone"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Phone Number</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+
+                          <FormField
+                            control={bulkOrderForm.control}
+                            name="message"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Additional Requirements (Optional)</FormLabel>
+                                <FormControl>
+                                  <Textarea {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <DialogFooter>
+                            <Button type="submit" className="bg-amber-600 hover:bg-amber-700">
+                              Submit Inquiry
+                            </Button>
+                          </DialogFooter>
+                        </form>
+                      </Form>
+                    </DialogContent>
+                  </Dialog>
+                )}
+
+                {product.is_gift_suitable && (
+                  <Dialog open={isGiftOpen} onOpenChange={setIsGiftOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="w-full text-purple-600 border-purple-200 hover:bg-purple-50">
+                        <Gift className="mr-2 h-4 w-4" />
+                        Send as Gift
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Send {product.name} as a Gift</DialogTitle>
+                        <DialogDescription>
+                          Fill out the details below to send this product as a gift.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <Form {...giftForm}>
+                        <form onSubmit={giftForm.handleSubmit(onGiftSubmit)} className="space-y-4">
+                          <FormField
+                            control={giftForm.control}
+                            name="quantity"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Quantity</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="number" 
+                                    min="1"
+                                    {...field}
+                                    onChange={(e) => field.onChange(parseInt(e.target.value))}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={giftForm.control}
+                            name="packSize"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Pack Size</FormLabel>
+                                <Select
+                                  value={field.value}
+                                  onValueChange={field.onChange}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select a pack size" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {product.pack_sizes?.map((size) => (
+                                      <SelectItem key={size} value={size}>
+                                        {size}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={giftForm.control}
+                            name="recipientName"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Recipient's Name</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={giftForm.control}
+                            name="recipientEmail"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Recipient's Email</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={giftForm.control}
+                            name="message"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Gift Message (Optional)</FormLabel>
+                                <FormControl>
+                                  <Textarea {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={giftForm.control}
+                            name="giftWrap"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                                <FormControl>
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                                    checked={field.value}
+                                    onChange={(e) => field.onChange(e.target.checked)}
+                                  />
+                                </FormControl>
+                                <div className="space-y-1 leading-none">
+                                  <FormLabel>Include Gift Wrapping</FormLabel>
+                                </div>
+                              </FormItem>
+                            )}
+                          />
+
+                          <DialogFooter>
+                            <Button type="submit" className="bg-amber-600 hover:bg-amber-700">
+                              Send Gift
+                            </Button>
+                          </DialogFooter>
+                        </form>
+                      </Form>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </div>
+              
+              {/* Benefits */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 text-sm border-t border-gray-100 mt-6 pt-6">
+                <div className="flex items-center">
+                  <PackageCheck className="mr-2 h-5 w-5 text-amber-600" />
+                  <span className="text-gray-700">Premium Quality</span>
+                </div>
+                <div className="flex items-center">
+                  <Truck className="mr-2 h-5 w-5 text-amber-600" />
+                  <span className="text-gray-700">Fast Delivery</span>
+                </div>
+                <div className="flex items-center">
+                  <RefreshCw className="mr-2 h-5 w-5 text-amber-600" />
+                  <span className="text-gray-700">Easy Returns</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
         
         {/* Product Details Tabs */}
-        <div className="mt-16">
-          <Tabs defaultValue="description">
-            <TabsList className="grid w-full grid-cols-3">
+        <div className="mt-8 bg-white rounded-xl shadow-sm overflow-hidden">
+          <Tabs defaultValue="description" className="p-6">
+            <TabsList className="grid w-full grid-cols-4 mb-8">
               <TabsTrigger value="description">Description</TabsTrigger>
               <TabsTrigger value="additional">Additional Info</TabsTrigger>
+              <TabsTrigger value="recipes">Recipes</TabsTrigger>
               <TabsTrigger value="reviews">Reviews ({reviews.length})</TabsTrigger>
             </TabsList>
-            <TabsContent value="description" className="mt-6">
+            <TabsContent value="description">
               <Card>
                 <CardContent className="pt-6">
                   <div className="prose max-w-none">
@@ -480,7 +883,7 @@ const ProductDetailPage = () => {
                 </CardContent>
               </Card>
             </TabsContent>
-            <TabsContent value="additional" className="mt-6">
+            <TabsContent value="additional">
               <Card>
                 <CardContent className="pt-6">
                   <h3 className="text-xl font-semibold mb-4">Additional Information</h3>
@@ -541,7 +944,96 @@ const ProductDetailPage = () => {
                 </CardContent>
               </Card>
             </TabsContent>
-            <TabsContent value="reviews" className="mt-6">
+            <TabsContent value="recipes">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="prose max-w-none">
+                    <h3 className="text-xl font-semibold mb-4">Delicious Recipes Using {product.name}</h3>
+                    
+                    {/* Recipe 1 */}
+                    <div className="mb-8 border rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
+                      <h4 className="text-lg font-semibold text-amber-700">Traditional {product.name} Recipe</h4>
+                      <div className="flex flex-col md:flex-row md:gap-8 mt-4">
+                        <div className="md:w-1/3">
+                          <img 
+                            src={`https://source.unsplash.com/random/300x200/?${product.name.split(' ')[0]},food`} 
+                            alt="Recipe" 
+                            className="rounded-lg w-full h-48 object-cover mb-4"
+                          />
+                          <div className="flex justify-between text-sm text-gray-600 mb-4">
+                            <span>Prep: 15 mins</span>
+                            <span>Cook: 30 mins</span>
+                            <span>Serves: 4</span>
+                          </div>
+                        </div>
+                        <div className="md:w-2/3">
+                          <h5 className="font-medium mb-2">Ingredients:</h5>
+                          <ul className="list-disc pl-5 mb-4 text-gray-700">
+                            <li>{product.name} - {product.pack_sizes?.[0] || '100g'}</li>
+                            <li>Onions - 2 medium, finely chopped</li>
+                            <li>Tomatoes - 3, chopped</li>
+                            <li>Vegetable oil - 2 tbsp</li>
+                            <li>Salt and pepper to taste</li>
+                            <li>Fresh herbs for garnish</li>
+                          </ul>
+                          
+                          <h5 className="font-medium mb-2">Instructions:</h5>
+                          <ol className="list-decimal pl-5 text-gray-700">
+                            <li>Heat oil in a large pan over medium heat</li>
+                            <li>Add onions and sauté until translucent</li>
+                            <li>Add {product.name} and cook for 5-7 minutes</li>
+                            <li>Stir in chopped tomatoes and cook for another 5 minutes</li>
+                            <li>Season with salt and pepper</li>
+                            <li>Garnish with fresh herbs before serving</li>
+                          </ol>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Recipe 2 */}
+                    <div className="border rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
+                      <h4 className="text-lg font-semibold text-amber-700">Modern Fusion with {product.name}</h4>
+                      <div className="flex flex-col md:flex-row md:gap-8 mt-4">
+                        <div className="md:w-1/3">
+                          <img 
+                            src={`https://source.unsplash.com/random/300x200/?${product.name.split(' ')[0]},cooking`} 
+                            alt="Recipe" 
+                            className="rounded-lg w-full h-48 object-cover mb-4"
+                          />
+                          <div className="flex justify-between text-sm text-gray-600 mb-4">
+                            <span>Prep: 20 mins</span>
+                            <span>Cook: 25 mins</span>
+                            <span>Serves: 2</span>
+                          </div>
+                        </div>
+                        <div className="md:w-2/3">
+                          <h5 className="font-medium mb-2">Ingredients:</h5>
+                          <ul className="list-disc pl-5 mb-4 text-gray-700">
+                            <li>{product.name} - {product.pack_sizes?.[0] || '100g'}</li>
+                            <li>Olive oil - 3 tbsp</li>
+                            <li>Garlic - 3 cloves, minced</li>
+                            <li>Fresh vegetables - 2 cups, mixed</li>
+                            <li>Lemon juice - 1 tbsp</li>
+                            <li>Mixed herbs - 1 tsp</li>
+                          </ul>
+                          
+                          <h5 className="font-medium mb-2">Instructions:</h5>
+                          <ol className="list-decimal pl-5 text-gray-700">
+                            <li>Heat olive oil in a pan over medium heat</li>
+                            <li>Add garlic and sauté for 1 minute</li>
+                            <li>Add mixed vegetables and cook until tender</li>
+                            <li>Incorporate {product.name} and cook for another 3-5 minutes</li>
+                            <li>Sprinkle with mixed herbs and a squeeze of lemon juice</li>
+                            <li>Serve hot as a side dish or main course</li>
+                          </ol>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="reviews">
               <Card>
                 <CardContent className="pt-6">
                   <h3 className="text-xl font-semibold mb-4">Customer Reviews</h3>
