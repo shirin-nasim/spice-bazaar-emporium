@@ -1,3 +1,4 @@
+
 import { supabase } from '@/lib/supabase';
 import { AdminUser, Category, Product, Subcategory } from '@/types/database.types';
 
@@ -225,7 +226,7 @@ export async function getAllAdmins(): Promise<AdminUser[]> {
 
 export async function addAdmin(email: string): Promise<AdminUser | null> {
   // First check if user exists in auth
-  const { data: { users } = {}, error: userError } = await supabase.auth.admin.listUsers();
+  const { data: { users } = { users: [] }, error: userError } = await supabase.auth.admin.listUsers();
   
   if (userError || !users) {
     console.error('Error finding users:', userError);
