@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { isAdmin } from '@/api/adminApi';
+import { isAdmin } from '@/api/admin';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProductsTab from './tabs/ProductsTab';

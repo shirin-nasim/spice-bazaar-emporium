@@ -1,14 +1,15 @@
+
 import { useEffect, useState } from 'react';
 import { 
   getProducts, 
-  getCategories, 
-  getSubcategories 
 } from '@/api/productApi';
 import { 
   createProduct, 
   updateProduct, 
-  deleteProduct 
-} from '@/api/adminApi';
+  deleteProduct,
+  getCategories,
+  getSubcategories
+} from '@/api/admin';
 import { Product, Category, Subcategory } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';

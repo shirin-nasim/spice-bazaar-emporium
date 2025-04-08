@@ -1,15 +1,14 @@
-import { useEffect, useState } from 'react';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect } from 'react';
 import { 
-  createCategory, 
-  updateCategory, 
-  deleteCategory, 
-  createSubcategory, 
-  updateSubcategory, 
-  deleteSubcategory,
-  getCategories,
-  getSubcategories
-} from '@/api/adminApi';
+  getCategories, 
+  getSubcategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  createSubcategory,
+  updateSubcategory,
+  deleteSubcategory
+} from '@/api/admin';
 import { Category, Subcategory } from '@/types/database.types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
