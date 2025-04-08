@@ -171,7 +171,16 @@ const ProductsTab = () => {
   
   const onCreateSubmit = async (data: ProductFormValues) => {
     try {
-      const result = await createProduct(data);
+      const newProduct = {
+        ...data,
+        rating: 0,
+        pack_sizes: null,
+        tags: null,
+        sourcing_city: null,
+        supplier_details: null,
+      };
+      
+      const result = await createProduct(newProduct);
       
       if (result) {
         toast({

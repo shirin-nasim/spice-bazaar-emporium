@@ -1,4 +1,3 @@
-
 import { supabase } from '@/lib/supabase';
 import { AdminUser, Category, Product, Subcategory } from '@/types/database.types';
 
@@ -48,9 +47,19 @@ export async function getSubcategories(): Promise<Subcategory[]> {
 
 // Product Management
 export async function createProduct(product: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product | null> {
+  // Ensure all required fields are present with defaults if needed
+  const productWithDefaults = {
+    ...product,
+    pack_sizes: product.pack_sizes || null,
+    rating: product.rating || 0,
+    tags: product.tags || null,
+    sourcing_city: product.sourcing_city || null,
+    supplier_details: product.supplier_details || null,
+  };
+  
   const { data, error } = await supabase
     .from('products')
-    .insert([product])
+    .insert([productWithDefaults])
     .select()
     .single();
   
@@ -215,22 +224,25 @@ export async function getAllAdmins(): Promise<AdminUser[]> {
 }
 
 export async function addAdmin(email: string): Promise<AdminUser | null> {
-  // First check if user exists in auth.users
-  const { data: userData, error: userError } = await supabase
-    .from('auth.users')
-    .select('id')
-    .eq('email', email)
-    .single();
+  // First check if user exists in auth
+  const { data: { users } = {}, error: userError } = await supabase.auth.admin.listUsers();
   
-  if (userError || !userData) {
-    console.error('Error finding user:', userError);
+  if (userError || !users) {
+    console.error('Error finding users:', userError);
+    return null;
+  }
+  
+  const user = users.find(u => u.email === email);
+  
+  if (!user) {
+    console.error('User not found with email:', email);
     return null;
   }
   
   // Add user to admin_users table
   const { data, error } = await supabase
     .from('admin_users')
-    .insert([{ id: userData.id, email }])
+    .insert([{ id: user.id, email }])
     .select()
     .single();
   
