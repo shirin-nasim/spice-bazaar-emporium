@@ -17,6 +17,35 @@ export async function isAdmin(): Promise<boolean> {
   return true;
 }
 
+// Get categories and subcategories
+export async function getCategories(): Promise<Category[]> {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*')
+    .order('name');
+  
+  if (error) {
+    console.error('Error fetching categories:', error);
+    return [];
+  }
+  
+  return data || [];
+}
+
+export async function getSubcategories(): Promise<Subcategory[]> {
+  const { data, error } = await supabase
+    .from('subcategories')
+    .select('*')
+    .order('name');
+  
+  if (error) {
+    console.error('Error fetching subcategories:', error);
+    return [];
+  }
+  
+  return data || [];
+}
+
 // Product Management
 export async function createProduct(product: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product | null> {
   const { data, error } = await supabase
@@ -186,8 +215,12 @@ export async function getAllAdmins(): Promise<AdminUser[]> {
 }
 
 export async function addAdmin(email: string): Promise<AdminUser | null> {
-  // First get the user id from the auth.users table
-  const { data: userData, error: userError } = await supabase.auth.admin.getUserByEmail(email);
+  // First check if user exists in auth.users
+  const { data: userData, error: userError } = await supabase
+    .from('auth.users')
+    .select('id')
+    .eq('email', email)
+    .single();
   
   if (userError || !userData) {
     console.error('Error finding user:', userError);
@@ -197,7 +230,7 @@ export async function addAdmin(email: string): Promise<AdminUser | null> {
   // Add user to admin_users table
   const { data, error } = await supabase
     .from('admin_users')
-    .insert([{ id: userData.user.id, email }])
+    .insert([{ id: userData.id, email }])
     .select()
     .single();
   

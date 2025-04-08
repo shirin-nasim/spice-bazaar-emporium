@@ -1,13 +1,14 @@
-
 import { useEffect, useState } from 'react';
 import { 
-  deleteProduct, 
   getProducts, 
-  updateProduct, 
-  createProduct, 
   getCategories, 
   getSubcategories 
 } from '@/api/productApi';
+import { 
+  createProduct, 
+  updateProduct, 
+  deleteProduct 
+} from '@/api/adminApi';
 import { Product, Category, Subcategory } from '@/types/database.types';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -55,7 +56,6 @@ import {
 } from 'lucide-react';
 import { useDebounce } from '@/hooks/use-debounce';
 
-// Product form schema
 const productSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters'),
   slug: z.string().min(3, 'Slug must be at least 3 characters'),
@@ -123,7 +123,6 @@ const ProductsTab = () => {
     }
   });
   
-  // Fetch products, categories, and subcategories on load
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -153,7 +152,6 @@ const ProductsTab = () => {
     fetchData();
   }, [refreshTrigger, toast]);
   
-  // Filter products based on search
   useEffect(() => {
     const fetchFilteredProducts = async () => {
       setLoading(true);
@@ -171,7 +169,6 @@ const ProductsTab = () => {
     fetchFilteredProducts();
   }, [debouncedSearch]);
   
-  // Handle creating a product
   const onCreateSubmit = async (data: ProductFormValues) => {
     try {
       const result = await createProduct(data);
@@ -198,7 +195,6 @@ const ProductsTab = () => {
     }
   };
   
-  // Handle editing a product
   const onEditSubmit = async (data: ProductFormValues) => {
     if (!currentProduct) return;
     
@@ -226,7 +222,6 @@ const ProductsTab = () => {
     }
   };
   
-  // Handle deleting a product
   const handleDelete = async () => {
     if (!currentProduct) return;
     
@@ -255,7 +250,6 @@ const ProductsTab = () => {
     }
   };
   
-  // Set up edit form when a product is selected
   useEffect(() => {
     if (currentProduct && isEditDialogOpen) {
       editForm.reset({
@@ -281,7 +275,6 @@ const ProductsTab = () => {
     }
   }, [currentProduct, isEditDialogOpen, editForm]);
   
-  // Generate slug from name for create form
   useEffect(() => {
     const subscription = createForm.watch((value, { name }) => {
       if (name === 'name') {
@@ -667,7 +660,6 @@ const ProductsTab = () => {
         </div>
       </div>
       
-      {/* Products Table */}
       <div className="border rounded-md">
         <Table>
           <TableHeader>
@@ -769,7 +761,6 @@ const ProductsTab = () => {
                         
                         <Form {...editForm}>
                           <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
-                            {/* Same form fields as create form */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <FormField
                                 control={editForm.control}

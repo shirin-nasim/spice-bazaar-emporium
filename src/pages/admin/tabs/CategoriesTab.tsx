@@ -1,15 +1,14 @@
-
 import { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  getCategories, 
-  getSubcategories, 
   createCategory, 
   updateCategory, 
   deleteCategory, 
   createSubcategory, 
   updateSubcategory, 
-  deleteSubcategory 
+  deleteSubcategory,
+  getCategories,
+  getSubcategories
 } from '@/api/adminApi';
 import { Category, Subcategory } from '@/types/database.types';
 import { Button } from '@/components/ui/button';
@@ -230,8 +229,15 @@ const CategoriesTab = () => {
   
   // Category CRUD operations
   const onCreateCategorySubmit = async (data: CategoryFormValues) => {
+    const categoryData: Omit<Category, 'id' | 'created_at'> = {
+      name: data.name,
+      slug: data.slug,
+      description: data.description || null,
+      image_url: data.image_url || null
+    };
+    
     try {
-      const result = await createCategory(data);
+      const result = await createCategory(categoryData);
       
       if (result) {
         toast({
@@ -258,8 +264,15 @@ const CategoriesTab = () => {
   const onEditCategorySubmit = async (data: CategoryFormValues) => {
     if (!currentCategory) return;
     
+    const categoryData: Partial<Omit<Category, 'id' | 'created_at'>> = {
+      name: data.name,
+      slug: data.slug,
+      description: data.description,
+      image_url: data.image_url
+    };
+    
     try {
-      const result = await updateCategory(currentCategory.id, data);
+      const result = await updateCategory(currentCategory.id, categoryData);
       
       if (result) {
         toast({
@@ -312,8 +325,15 @@ const CategoriesTab = () => {
   
   // Subcategory CRUD operations
   const onCreateSubcategorySubmit = async (data: SubcategoryFormValues) => {
+    const subcategoryData: Omit<Subcategory, 'id' | 'created_at'> = {
+      name: data.name,
+      slug: data.slug,
+      description: data.description || null,
+      category_id: data.category_id
+    };
+    
     try {
-      const result = await createSubcategory(data);
+      const result = await createSubcategory(subcategoryData);
       
       if (result) {
         toast({

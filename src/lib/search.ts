@@ -8,4 +8,4 @@ export async function searchProducts(query: string): Promise<Product[]> {
   return await getProducts(undefined, undefined, query);
 }
 
-export { getFeaturedProducts, getProductById, getProductBySlug };
+export { getFeaturedProducts, getProductById, getProductBySlug, Product };
