@@ -1,68 +1,55 @@
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Session, User } from '@supabase/supabase-js';
+import { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+
+type User = any;
+type Session = any;
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<AuthResponse>;
-  signUp: (email: string, password: string, data?: Record<string, any>) => Promise<AuthResponse>;
+  signIn: (email: string, password: string) => Promise<{ user: User | null; session: Session | null; error: any }>;
+  signUp: (email: string, password: string, data?: any) => Promise<{ user: User | null; session: Session | null; error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   sendMagicLink: (email: string) => Promise<void>;
-  updateUserProfile: (data: Record<string, any>) => Promise<void>;
+  updateUserProfile: (data: any) => Promise<void>;
   isAdmin: () => Promise<boolean>;
-}
-
-interface AuthResponse {
-  user: User | null;
-  session: Session | null;
-  error: Error | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
 
   useEffect(() => {
-    // Check for existing session on component mount
-    const checkSession = async () => {
+    // Check active session and set the user
+    const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user || null);
       setLoading(false);
     };
 
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user || null);
-        setLoading(false);
-      }
-    );
+    getSession();
 
-    checkSession();
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user || null);
+      setLoading(false);
+    });
 
-    // Cleanup subscription on unmount
     return () => {
       subscription.unsubscribe();
     };
   }, []);
 
-  const signIn = async (email: string, password: string): Promise<AuthResponse> => {
+  const signIn = async (email: string, password: string) => {
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password,
+        password
       });
 
       if (error) {
@@ -77,17 +64,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signUp = async (email: string, password: string, data?: Record<string, any>): Promise<AuthResponse> => {
+  const signUp = async (email: string, password: string, data?: any) => {
     setLoading(true);
     try {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: {
-            ...data,
-          },
-        },
+          data: { ...data }
+        }
       });
 
       if (authError) {
@@ -102,27 +87,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signOut = async (): Promise<void> => {
+  const signOut = async () => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signOut();
-
       if (error) {
         console.error('Sign Out Error:', error);
       }
-
       setUser(null);
-      navigate('/login'); // Redirect to login page after sign out
+      // We don't need router.push here, we'll handle navigation after logout in components
     } finally {
       setLoading(false);
     }
   };
 
-  const resetPassword = async (email: string): Promise<void> => {
+  const resetPassword = async (email: string) => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/update-password`,
+        emailRedirectTo: `${window.location.origin}/update-password`
       });
 
       if (error) {
@@ -136,15 +119,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const sendMagicLink = async (email: string): Promise<void> => {
+  const sendMagicLink = async (email: string) => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
           shouldCreateUser: true,
-          redirectTo: window.location.origin,
-        },
+          emailRedirectTo: window.location.origin
+        }
       });
 
       if (error) {
@@ -158,7 +141,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const updateUserProfile = async (data: Record<string, any>): Promise<void> => {
+  const updateUserProfile = async (data: any) => {
     setLoading(true);
     try {
       if (!user) {
@@ -166,10 +149,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return;
       }
 
-      const { error } = await supabase
-        .from('profiles')
-        .update(data)
-        .eq('id', user.id);
+      const { error } = await supabase.from('profiles').update(data).eq('id', user.id);
 
       if (error) {
         console.error('Update User Error:', error);
@@ -182,7 +162,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const isAdmin = async (): Promise<boolean> => {
+  const isAdmin = async () => {
     if (!user) return false;
 
     try {
@@ -213,13 +193,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     resetPassword,
     sendMagicLink,
     updateUserProfile,
-    isAdmin,
+    isAdmin
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
-export const useAuth = (): AuthContextType => {
+export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');

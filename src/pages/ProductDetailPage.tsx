@@ -1,26 +1,16 @@
-
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card } from '@/components/ui/card';
-import {
-  ShoppingCart,
-  Heart,
-  Share2,
-  Star,
-  Clock,
-  MapPin,
-  Package,
-  Check,
-  Info,
-  ShoppingBag
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/lib/supabase';
-import { Product, Review, Category, Subcategory, ProductPricing } from '@/types/database.types';
+import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { Star, Heart, ShoppingCart, Package, Gift as GiftIcon } from 'lucide-react';
 import ProductCard from '@/components/shared/ProductCard';
 
 export default function ProductDetailPage() {
@@ -37,7 +27,6 @@ export default function ProductDetailPage() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Calculate dynamic price based on selected pack size
   const getSelectedPackPrice = (): number => {
     if (!product) return 0;
     
@@ -53,7 +42,6 @@ export default function ProductDetailPage() {
     const fetchProductData = async () => {
       setLoading(true);
       try {
-        // Fetch product
         const { data: productData, error: productError } = await supabase
           .from('products')
           .select('*')
@@ -65,12 +53,10 @@ export default function ProductDetailPage() {
 
         setProduct(productData);
         
-        // Set default selected pack size
         if (productData.pack_sizes && productData.pack_sizes.length > 0) {
           setSelectedPackSize(productData.pack_sizes[0]);
         }
 
-        // Fetch category
         if (productData.category_id) {
           const { data: categoryData } = await supabase
             .from('categories')
@@ -81,7 +67,6 @@ export default function ProductDetailPage() {
           setCategory(categoryData || null);
         }
 
-        // Fetch subcategory
         if (productData.subcategory_id) {
           const { data: subcategoryData } = await supabase
             .from('subcategories')
@@ -92,7 +77,6 @@ export default function ProductDetailPage() {
           setSubcategory(subcategoryData || null);
         }
 
-        // Fetch reviews
         const { data: reviewsData } = await supabase
           .from('reviews')
           .select('*')
@@ -101,7 +85,6 @@ export default function ProductDetailPage() {
 
         setReviews(reviewsData || []);
 
-        // Fetch related products
         const { data: relatedData } = await supabase
           .from('products')
           .select('*')
@@ -111,7 +94,6 @@ export default function ProductDetailPage() {
 
         setRelatedProducts(relatedData || []);
 
-        // Check if product is in user's wishlist
         if (user) {
           const { data: wishlistData } = await supabase
             .from('wishlists')
@@ -143,7 +125,6 @@ export default function ProductDetailPage() {
     try {
       if (!product) return;
 
-      // For logged in users, add to database
       if (user) {
         const { data: cartData, error: cartError } = await supabase
           .from('carts')
@@ -154,7 +135,6 @@ export default function ProductDetailPage() {
         let cartId;
         
         if (cartError || !cartData) {
-          // Create a new cart if it doesn't exist
           const { data: newCart, error: newCartError } = await supabase
             .from('carts')
             .insert({ user_id: user.id })
@@ -170,7 +150,6 @@ export default function ProductDetailPage() {
           cartId = cartData.id;
         }
 
-        // Check if product already in cart with same size
         const { data: existingItems } = await supabase
           .from('cart_items')
           .select('*')
@@ -179,7 +158,6 @@ export default function ProductDetailPage() {
           .eq('pack_size', selectedPackSize);
 
         if (existingItems && existingItems.length > 0) {
-          // Update quantity if already in cart
           const { error: updateError } = await supabase
             .from('cart_items')
             .update({ quantity: existingItems[0].quantity + quantity })
@@ -187,7 +165,6 @@ export default function ProductDetailPage() {
 
           if (updateError) throw updateError;
         } else {
-          // Add new item to cart
           const { error: itemError } = await supabase
             .from('cart_items')
             .insert({
@@ -200,11 +177,9 @@ export default function ProductDetailPage() {
           if (itemError) throw itemError;
         }
       } else {
-        // For guests, store in localStorage
         const existingCart = localStorage.getItem('guestCart');
         const cart = existingCart ? JSON.parse(existingCart) : { items: [] };
         
-        // Check if product already in cart with same size
         const existingItem = cart.items.find((item: any) => 
           item.product_id === product.id && item.pack_size === selectedPackSize
         );
@@ -216,7 +191,7 @@ export default function ProductDetailPage() {
             product_id: product.id,
             pack_size: selectedPackSize,
             quantity: quantity,
-            id: Date.now() // temporary ID for the guest cart
+            id: Date.now()
           });
         }
         
@@ -251,7 +226,6 @@ export default function ProductDetailPage() {
       if (!product) return;
 
       if (isWishlisted) {
-        // Remove from wishlist
         const { error } = await supabase
           .from('wishlists')
           .delete()
@@ -266,7 +240,6 @@ export default function ProductDetailPage() {
           description: 'Product removed from your wishlist',
         });
       } else {
-        // Add to wishlist
         const { error } = await supabase
           .from('wishlists')
           .insert({
@@ -292,7 +265,6 @@ export default function ProductDetailPage() {
     }
   };
 
-  // Loading state
   if (loading) {
     return (
       <MainLayout>
@@ -304,7 +276,6 @@ export default function ProductDetailPage() {
     );
   }
 
-  // Product not found
   if (!product) {
     return (
       <MainLayout>
@@ -322,7 +293,6 @@ export default function ProductDetailPage() {
   return (
     <MainLayout>
       <div className="container mx-auto px-4 py-8">
-        {/* Breadcrumbs */}
         <div className="text-sm breadcrumbs mb-6">
           <ul className="flex items-center space-x-2 text-gray-500">
             <li><Link to="/" className="hover:text-amber-600">Home</Link></li>
@@ -344,7 +314,6 @@ export default function ProductDetailPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-          {/* Product Image */}
           <div className="bg-gray-50 rounded-lg overflow-hidden flex items-center justify-center h-[400px] md:h-[500px]">
             {product.image_url ? (
               <img 
@@ -359,11 +328,9 @@ export default function ProductDetailPage() {
             )}
           </div>
 
-          {/* Product Info */}
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-3">{product.name}</h1>
             
-            {/* Rating */}
             <div className="flex items-center mb-4">
               <div className="flex">
                 {Array.from({ length: 5 }).map((_, i) => (
@@ -380,7 +347,6 @@ export default function ProductDetailPage() {
               </span>
             </div>
 
-            {/* Price */}
             <div className="mb-6">
               <span className="text-2xl font-bold text-amber-600">
                 ₹{getSelectedPackPrice().toFixed(2)}
@@ -392,10 +358,8 @@ export default function ProductDetailPage() {
               )}
             </div>
 
-            {/* Description */}
             <p className="text-gray-700 mb-6">{product.description}</p>
 
-            {/* Pack Size Selection */}
             {product.pack_sizes && product.pack_sizes.length > 0 && (
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -419,7 +383,6 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {/* Quantity */}
             <div className="mb-8">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Quantity
@@ -447,7 +410,6 @@ export default function ProductDetailPage() {
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex flex-wrap gap-4">
               <Button 
                 onClick={addToCart}
@@ -471,7 +433,6 @@ export default function ProductDetailPage() {
               </Button>
             </div>
 
-            {/* Product Metadata */}
             <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
               {product.origin && (
                 <div className="flex items-center">
@@ -491,7 +452,7 @@ export default function ProductDetailPage() {
               )}
               {product.is_gift_suitable && (
                 <div className="flex items-center">
-                  <Gift className="h-5 w-5 text-amber-600 mr-2" />
+                  <GiftIcon className="h-5 w-5 text-amber-600 mr-2" />
                   <span className="text-sm text-gray-600">
                     <span className="font-medium">Gift Suitable:</span> Yes
                   </span>
@@ -509,7 +470,6 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* Recipe Ideas */}
         <div className="mb-16">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Recipe Ideas</h2>
           <div className="bg-amber-50 p-6 rounded-lg">
@@ -543,7 +503,6 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* Related Products */}
         {relatedProducts.length > 0 && (
           <div className="mb-16">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">You May Also Like</h2>
@@ -555,7 +514,6 @@ export default function ProductDetailPage() {
           </div>
         )}
 
-        {/* Product Tabs */}
         <Tabs defaultValue="details" className="mb-12">
           <TabsList className="w-full border-b border-gray-200 mb-6">
             <TabsTrigger value="details" className="py-3 px-5">Product Details</TabsTrigger>
@@ -567,7 +525,6 @@ export default function ProductDetailPage() {
             <div className="space-y-4">
               <p>{product.description}</p>
               
-              {/* Product Tags */}
               {product.tags && product.tags.length > 0 && (
                 <div className="mt-4">
                   <h4 className="font-medium mb-2">Tags:</h4>
@@ -581,7 +538,6 @@ export default function ProductDetailPage() {
                 </div>
               )}
               
-              {/* Use Cases */}
               {product.use_case && (
                 <div>
                   <h4 className="font-medium mb-2">Use Cases:</h4>
