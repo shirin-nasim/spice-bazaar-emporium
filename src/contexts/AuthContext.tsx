@@ -1,9 +1,8 @@
+
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Auth, ThemeSupa } from '@supabase/auth-ui-react';
-import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
-import { useRouter } from 'next/router';
+import { useNavigate } from 'react-router-dom';
 import { Session, User } from '@supabase/supabase-js';
-import { Database } from '@/types/supabase';
+import { supabase } from '@/lib/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -32,20 +31,36 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const supabaseClient = useSupabaseClient<Database>();
-  const session = useSession();
-  const router = useRouter();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Set the user based on the session
-    setUser(session?.user || null);
-    setLoading(false);
-  }, [session]);
+    // Check for existing session on component mount
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user || null);
+      setLoading(false);
+    };
+
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user || null);
+        setLoading(false);
+      }
+    );
+
+    checkSession();
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const signIn = async (email: string, password: string): Promise<AuthResponse> => {
     setLoading(true);
     try {
-      const { data, error } = await supabaseClient.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -65,7 +80,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signUp = async (email: string, password: string, data?: Record<string, any>): Promise<AuthResponse> => {
     setLoading(true);
     try {
-      const { data: authData, error: authError } = await supabaseClient.auth.signUp({
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -90,14 +105,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signOut = async (): Promise<void> => {
     setLoading(true);
     try {
-      const { error } = await supabaseClient.auth.signOut();
+      const { error } = await supabase.auth.signOut();
 
       if (error) {
         console.error('Sign Out Error:', error);
       }
 
       setUser(null);
-      router.push('/login'); // Redirect to login page after sign out
+      navigate('/login'); // Redirect to login page after sign out
     } finally {
       setLoading(false);
     }
@@ -106,7 +121,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const resetPassword = async (email: string): Promise<void> => {
     setLoading(true);
     try {
-      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/update-password`,
       });
 
@@ -124,7 +139,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const sendMagicLink = async (email: string): Promise<void> => {
     setLoading(true);
     try {
-      const { error } = await supabaseClient.auth.signInWithOtp({
+      const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
           shouldCreateUser: true,
@@ -151,7 +166,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return;
       }
 
-      const { error } = await supabaseClient
+      const { error } = await supabase
         .from('profiles')
         .update(data)
         .eq('id', user.id);
@@ -171,7 +186,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!user) return false;
 
     try {
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabase
         .from('admin_users')
         .select('*')
         .eq('id', user.id)

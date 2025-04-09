@@ -1,1181 +1,654 @@
+
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
 import MainLayout from '@/components/layout/MainLayout';
-import { 
-  getProductBySlug, 
-  getProductReviews, 
-  getRelatedProducts, 
-  createReview 
-} from '@/api/productApi';
-import { addToCart, getUserCart } from '@/api/cartApi';
-import { addToWishlist, isInWishlist, removeFromWishlist } from '@/api/wishlistApi';
-import { Product, Review } from '@/types/database.types';
-import ProductCard from '@/components/shared/ProductCard';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  Star, 
-  Heart, 
-  Minus, 
-  Plus, 
-  ShoppingCart, 
-  PackageCheck, 
-  Truck, 
-  RefreshCw, 
+import { Card } from '@/components/ui/card';
+import {
+  ShoppingCart,
+  Heart,
+  Share2,
+  Star,
+  Clock,
+  MapPin,
+  Package,
   Check,
-  Gift,
-  Users
+  Info,
+  ShoppingBag
 } from 'lucide-react';
-import { format } from 'date-fns';
-import { useForm } from 'react-hook-form';
-import * as z from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase';
+import { Product, Review, Category, Subcategory, ProductPricing } from '@/types/database.types';
+import { useAuth } from '@/contexts/AuthContext';
+import ProductCard from '@/components/shared/ProductCard';
 
-const reviewSchema = z.object({
-  rating: z.number().min(1).max(5),
-  comment: z.string().min(5, "Comment must be at least 5 characters").max(500)
-});
-
-const bulkOrderSchema = z.object({
-  quantity: z.number().min(10, "Bulk orders must be at least 10 units"),
-  packSize: z.string().min(1, "Please select a pack size"),
-  companyName: z.string().min(2, "Company name is required"),
-  email: z.string().email("Please enter a valid email"),
-  phone: z.string().min(10, "Please enter a valid phone number"),
-  message: z.string().optional()
-});
-
-const giftSchema = z.object({
-  quantity: z.number().min(1, "Please select at least 1 unit"),
-  packSize: z.string().min(1, "Please select a pack size"),
-  recipientName: z.string().min(2, "Recipient name is required"),
-  recipientEmail: z.string().email("Please enter a valid email"),
-  message: z.string().optional(),
-  giftWrap: z.boolean().default(true)
-});
-
-const ProductDetailPage = () => {
+export default function ProductDetailPage() {
   const { slug } = useParams<{ slug: string }>();
-  const { user } = useAuth();
-  const { toast } = useToast();
-  
   const [product, setProduct] = useState<Product | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [category, setCategory] = useState<Category | null>(null);
+  const [subcategory, setSubcategory] = useState<Subcategory | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedPackSize, setSelectedPackSize] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
-  const [addingToCart, setAddingToCart] = useState(false);
-  const [inWishlist, setInWishlist] = useState(false);
-  const [wishlistLoading, setWishlistLoading] = useState(false);
-  const [addingReview, setAddingReview] = useState(false);
-  const [selectedRating, setSelectedRating] = useState(5);
-  const [isBulkOrderOpen, setIsBulkOrderOpen] = useState(false);
-  const [isGiftOpen, setIsGiftOpen] = useState(false);
-  const [calculatedPrice, setCalculatedPrice] = useState<number>(0);
-  
-  const form = useForm<z.infer<typeof reviewSchema>>({
-    resolver: zodResolver(reviewSchema),
-    defaultValues: {
-      rating: 5,
-      comment: ""
-    }
-  });
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const { toast } = useToast();
+  const { user } = useAuth();
 
-  const bulkOrderForm = useForm<z.infer<typeof bulkOrderSchema>>({
-    resolver: zodResolver(bulkOrderSchema),
-    defaultValues: {
-      quantity: 10,
-      packSize: '',
-      companyName: '',
-      email: '',
-      phone: '',
-      message: ''
+  // Calculate dynamic price based on selected pack size
+  const getSelectedPackPrice = (): number => {
+    if (!product) return 0;
+    
+    if (product.pack_prices && selectedPackSize) {
+      const selectedPack = product.pack_prices.find(p => p.pack_size === selectedPackSize);
+      return selectedPack ? (selectedPack.sale_price || selectedPack.price) : product.sale_price || product.price;
     }
-  });
+    
+    return product.sale_price || product.price;
+  };
 
-  const giftForm = useForm<z.infer<typeof giftSchema>>({
-    resolver: zodResolver(giftSchema),
-    defaultValues: {
-      quantity: 1,
-      packSize: '',
-      recipientName: '',
-      recipientEmail: '',
-      message: '',
-      giftWrap: true
-    }
-  });
-  
   useEffect(() => {
-    const fetchProductDetails = async () => {
-      if (!slug) return;
-      
+    const fetchProductData = async () => {
       setLoading(true);
-      
       try {
-        const productData = await getProductBySlug(slug);
-        
-        if (!productData) {
-          setLoading(false);
-          return;
-        }
-        
+        // Fetch product
+        const { data: productData, error: productError } = await supabase
+          .from('products')
+          .select('*')
+          .eq('slug', slug)
+          .single();
+
+        if (productError) throw productError;
+        if (!productData) throw new Error('Product not found');
+
         setProduct(productData);
-        setSelectedPackSize(productData.pack_sizes?.[0] || '');
         
-        // Set initial calculated price
-        const initialPrice = productData.sale_price || productData.price;
-        setCalculatedPrice(initialPrice);
-        
-        // Fetch reviews
-        const reviewsData = await getProductReviews(productData.id);
-        setReviews(reviewsData);
-        
-        // Fetch related products if we have a category
+        // Set default selected pack size
+        if (productData.pack_sizes && productData.pack_sizes.length > 0) {
+          setSelectedPackSize(productData.pack_sizes[0]);
+        }
+
+        // Fetch category
         if (productData.category_id) {
-          // Convert to string first to fix type error
-          const related = await getRelatedProducts(productData.category_id, productData.id, 4);
-          setRelatedProducts(related);
+          const { data: categoryData } = await supabase
+            .from('categories')
+            .select('*')
+            .eq('id', productData.category_id)
+            .single();
+          
+          setCategory(categoryData || null);
         }
-        
-        // Check if in wishlist
+
+        // Fetch subcategory
+        if (productData.subcategory_id) {
+          const { data: subcategoryData } = await supabase
+            .from('subcategories')
+            .select('*')
+            .eq('id', productData.subcategory_id)
+            .single();
+          
+          setSubcategory(subcategoryData || null);
+        }
+
+        // Fetch reviews
+        const { data: reviewsData } = await supabase
+          .from('reviews')
+          .select('*')
+          .eq('product_id', productData.id)
+          .order('created_at', { ascending: false });
+
+        setReviews(reviewsData || []);
+
+        // Fetch related products
+        const { data: relatedData } = await supabase
+          .from('products')
+          .select('*')
+          .eq('category_id', productData.category_id)
+          .neq('id', productData.id)
+          .limit(4);
+
+        setRelatedProducts(relatedData || []);
+
+        // Check if product is in user's wishlist
         if (user) {
-          const wishlistStatus = await isInWishlist(user.id, productData.id);
-          setInWishlist(wishlistStatus);
+          const { data: wishlistData } = await supabase
+            .from('wishlists')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('product_id', productData.id)
+            .single();
+
+          setIsWishlisted(!!wishlistData);
         }
-        
-        setLoading(false);
       } catch (error) {
-        console.error('Error fetching product details:', error);
+        console.error('Error fetching product:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Failed to load product details',
+        });
+      } finally {
         setLoading(false);
       }
     };
-    
-    fetchProductDetails();
-  }, [slug, user]);
-  
-  // Calculate price based on quantity and apply any volume discounts
-  useEffect(() => {
-    if (!product) return;
-    
-    let basePrice = product.sale_price || product.price;
-    
-    // Check if we have pack-specific pricing
-    if (product.pack_prices && product.pack_prices.length > 0 && selectedPackSize) {
-      const packPricing = product.pack_prices.find(p => p.pack_size === selectedPackSize);
-      if (packPricing) {
-        basePrice = packPricing.sale_price || packPricing.price;
-      }
+
+    if (slug) {
+      fetchProductData();
     }
-    
-    let finalPrice = basePrice * quantity;
-    
-    // Apply volume discounts if quantity >= 5
-    if (quantity >= 20) {
-      finalPrice = finalPrice * 0.85; // 15% discount for 20+ items
-    } else if (quantity >= 10) {
-      finalPrice = finalPrice * 0.9; // 10% discount for 10+ items
-    } else if (quantity >= 5) {
-      finalPrice = finalPrice * 0.95; // 5% discount for 5+ items
-    }
-    
-    setCalculatedPrice(finalPrice);
-  }, [quantity, product, selectedPackSize]);
-  
-  const handleQuantityChange = (change: number) => {
-    const newQuantity = quantity + change;
-    if (newQuantity > 0 && newQuantity <= 20) {
-      setQuantity(newQuantity);
-    }
-  };
-  
-  const handleAddToCart = async () => {
-    if (!user) {
-      toast({
-        title: 'Please sign in',
-        description: 'You need to be signed in to add items to your cart',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
-    if (!product) return;
-    
-    setAddingToCart(true);
-    
+  }, [slug, toast, user]);
+
+  const addToCart = async () => {
     try {
-      const cart = await getUserCart(user.id);
-      
-      if (!cart) {
-        throw new Error('Could not retrieve cart');
-      }
-      
-      const result = await addToCart(cart.id, product.id, quantity, selectedPackSize);
-      
-      if (result) {
-        toast({
-          title: 'Added to cart',
-          description: `${product.name} (${selectedPackSize}) has been added to your cart`,
-        });
+      if (!product) return;
+
+      // For logged in users, add to database
+      if (user) {
+        const { data: cartData, error: cartError } = await supabase
+          .from('carts')
+          .select('id')
+          .eq('user_id', user.id)
+          .single();
+
+        let cartId;
+        
+        if (cartError || !cartData) {
+          // Create a new cart if it doesn't exist
+          const { data: newCart, error: newCartError } = await supabase
+            .from('carts')
+            .insert({ user_id: user.id })
+            .select('id')
+            .single();
+
+          if (newCartError) {
+            throw newCartError;
+          }
+          
+          cartId = newCart.id;
+        } else {
+          cartId = cartData.id;
+        }
+
+        // Check if product already in cart with same size
+        const { data: existingItems } = await supabase
+          .from('cart_items')
+          .select('*')
+          .eq('cart_id', cartId)
+          .eq('product_id', product.id)
+          .eq('pack_size', selectedPackSize);
+
+        if (existingItems && existingItems.length > 0) {
+          // Update quantity if already in cart
+          const { error: updateError } = await supabase
+            .from('cart_items')
+            .update({ quantity: existingItems[0].quantity + quantity })
+            .eq('id', existingItems[0].id);
+
+          if (updateError) throw updateError;
+        } else {
+          // Add new item to cart
+          const { error: itemError } = await supabase
+            .from('cart_items')
+            .insert({
+              cart_id: cartId,
+              product_id: product.id,
+              quantity: quantity,
+              pack_size: selectedPackSize
+            });
+
+          if (itemError) throw itemError;
+        }
       } else {
-        throw new Error('Failed to add to cart');
+        // For guests, store in localStorage
+        const existingCart = localStorage.getItem('guestCart');
+        const cart = existingCart ? JSON.parse(existingCart) : { items: [] };
+        
+        // Check if product already in cart with same size
+        const existingItem = cart.items.find((item: any) => 
+          item.product_id === product.id && item.pack_size === selectedPackSize
+        );
+        
+        if (existingItem) {
+          existingItem.quantity += quantity;
+        } else {
+          cart.items.push({
+            product_id: product.id,
+            pack_size: selectedPackSize,
+            quantity: quantity,
+            id: Date.now() // temporary ID for the guest cart
+          });
+        }
+        
+        localStorage.setItem('guestCart', JSON.stringify(cart));
       }
-    } catch (error) {
+
       toast({
+        title: 'Success',
+        description: 'Product added to cart',
+      });
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      toast({
+        variant: 'destructive',
         title: 'Error',
         description: 'Failed to add product to cart',
-        variant: 'destructive',
       });
-    } finally {
-      setAddingToCart(false);
     }
   };
-  
+
   const toggleWishlist = async () => {
     if (!user) {
       toast({
-        title: 'Please sign in',
-        description: 'You need to be signed in to add items to your wishlist',
         variant: 'destructive',
+        title: 'Authentication Required',
+        description: 'Please login to add items to your wishlist',
       });
       return;
     }
-    
-    if (!product) return;
-    
-    setWishlistLoading(true);
-    
+
     try {
-      if (inWishlist) {
-        await removeFromWishlist(user.id, product.id);
-        setInWishlist(false);
+      if (!product) return;
+
+      if (isWishlisted) {
+        // Remove from wishlist
+        const { error } = await supabase
+          .from('wishlists')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('product_id', product.id);
+
+        if (error) throw error;
+        
+        setIsWishlisted(false);
         toast({
-          title: 'Removed from wishlist',
-          description: `${product.name} has been removed from your wishlist`,
+          title: 'Removed from Wishlist',
+          description: 'Product removed from your wishlist',
         });
       } else {
-        await addToWishlist(user.id, product.id);
-        setInWishlist(true);
+        // Add to wishlist
+        const { error } = await supabase
+          .from('wishlists')
+          .insert({
+            user_id: user.id,
+            product_id: product.id
+          });
+
+        if (error) throw error;
+        
+        setIsWishlisted(true);
         toast({
-          title: 'Added to wishlist',
-          description: `${product.name} has been added to your wishlist`,
+          title: 'Added to Wishlist',
+          description: 'Product added to your wishlist',
         });
       }
     } catch (error) {
+      console.error('Error updating wishlist:', error);
       toast({
+        variant: 'destructive',
         title: 'Error',
         description: 'Failed to update wishlist',
-        variant: 'destructive',
-      });
-    } finally {
-      setWishlistLoading(false);
-    }
-  };
-  
-  const onReviewSubmit = async (data: z.infer<typeof reviewSchema>) => {
-    if (!user || !product) return;
-    
-    setAddingReview(true);
-    
-    try {
-      const result = await createReview(product.id, user.id, data.rating, data.comment);
-      
-      if (result) {
-        // Add the new review to the current reviews
-        setReviews(prev => [result, ...prev]);
-        
-        toast({
-          title: 'Review submitted',
-          description: 'Thank you for your feedback!',
-        });
-        
-        form.reset();
-      } else {
-        throw new Error('Failed to submit review');
-      }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to submit review',
-        variant: 'destructive',
-      });
-    } finally {
-      setAddingReview(false);
-    }
-  };
-
-  const onBulkOrderSubmit = async (data: z.infer<typeof bulkOrderSchema>) => {
-    if (!product) return;
-    
-    try {
-      // Here you would integrate with your backend to process the bulk order
-      console.log('Bulk order submitted:', data);
-      
-      toast({
-        title: 'Bulk Order Requested',
-        description: 'Your bulk order request has been submitted. Our team will contact you shortly.',
-      });
-      
-      bulkOrderForm.reset();
-      setIsBulkOrderOpen(false);
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to submit bulk order request',
-        variant: 'destructive',
       });
     }
   };
 
-  const onGiftSubmit = async (data: z.infer<typeof giftSchema>) => {
-    if (!product) return;
-    
-    try {
-      // Here you would integrate with your backend to process the gift order
-      console.log('Gift order submitted:', data);
-      
-      toast({
-        title: 'Gift Order Placed',
-        description: 'Your gift order has been placed successfully!',
-      });
-      
-      giftForm.reset();
-      setIsGiftOpen(false);
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to submit gift order',
-        variant: 'destructive',
-      });
-    }
-  };
-  
+  // Loading state
   if (loading) {
     return (
       <MainLayout>
-        <div className="container mx-auto px-4 py-12">
-          <div className="animate-pulse">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-              <div className="bg-gray-200 aspect-square rounded-lg"></div>
-              <div className="space-y-6">
-                <div className="h-8 bg-gray-200 rounded w-3/4"></div>
-                <div className="h-6 bg-gray-200 rounded w-1/4"></div>
-                <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                <div className="h-12 bg-gray-200 rounded w-1/2 mt-6"></div>
-              </div>
-            </div>
-          </div>
+        <div className="container mx-auto px-4 py-8 text-center">
+          <div className="animate-spin mx-auto h-8 w-8 border-4 border-amber-500 border-t-transparent rounded-full"></div>
+          <p className="mt-4 text-gray-600">Loading product details...</p>
         </div>
       </MainLayout>
     );
   }
-  
+
+  // Product not found
   if (!product) {
     return (
       <MainLayout>
-        <div className="container mx-auto px-4 py-12 text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Product Not Found</h1>
+        <div className="container mx-auto px-4 py-16 text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Product Not Found</h1>
           <p className="text-gray-600 mb-8">The product you're looking for doesn't exist or has been removed.</p>
-          <Button asChild className="bg-amber-600 hover:bg-amber-700">
+          <Button asChild>
             <Link to="/products">Browse All Products</Link>
           </Button>
         </div>
       </MainLayout>
     );
   }
-  
+
   return (
     <MainLayout>
-      <div className="container mx-auto px-4 py-12">
-        {/* Product Details */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden p-6 mb-10">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            {/* Product Image */}
-            <div className="relative">
+      <div className="container mx-auto px-4 py-8">
+        {/* Breadcrumbs */}
+        <div className="text-sm breadcrumbs mb-6">
+          <ul className="flex items-center space-x-2 text-gray-500">
+            <li><Link to="/" className="hover:text-amber-600">Home</Link></li>
+            <li className="flex items-center">
+              <span className="mx-2">/</span>
+              <Link to="/products" className="hover:text-amber-600">Products</Link>
+            </li>
+            {category && (
+              <li className="flex items-center">
+                <span className="mx-2">/</span>
+                <Link to={`/category/${category.slug}`} className="hover:text-amber-600">{category.name}</Link>
+              </li>
+            )}
+            <li className="flex items-center">
+              <span className="mx-2">/</span>
+              <span className="text-gray-900">{product.name}</span>
+            </li>
+          </ul>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+          {/* Product Image */}
+          <div className="bg-gray-50 rounded-lg overflow-hidden flex items-center justify-center h-[400px] md:h-[500px]">
+            {product.image_url ? (
               <img 
-                src={product.image_url || '/placeholder.svg'} 
-                alt={product.name}
-                className="w-full h-auto rounded-lg shadow-sm object-cover aspect-square"
+                src={product.image_url} 
+                alt={product.name} 
+                className="w-full h-full object-contain"
               />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                <Package className="h-24 w-24 text-gray-300" />
+              </div>
+            )}
+          </div>
+
+          {/* Product Info */}
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-3">{product.name}</h1>
+            
+            {/* Rating */}
+            <div className="flex items-center mb-4">
+              <div className="flex">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Star 
+                    key={i}
+                    className={`h-5 w-5 ${i < Math.round(product.rating) 
+                      ? 'text-yellow-400 fill-current' 
+                      : 'text-gray-300'}`}
+                  />
+                ))}
+              </div>
+              <span className="ml-2 text-sm text-gray-600">
+                {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
+              </span>
+            </div>
+
+            {/* Price */}
+            <div className="mb-6">
+              <span className="text-2xl font-bold text-amber-600">
+                ₹{getSelectedPackPrice().toFixed(2)}
+              </span>
               {product.sale_price && (
-                <Badge className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1">
-                  Sale
-                </Badge>
-              )}
-              {product.featured && (
-                <Badge className="absolute top-4 right-4 bg-amber-500 text-white px-3 py-1">
-                  Featured
-                </Badge>
+                <span className="ml-2 text-gray-500 line-through">
+                  ₹{product.price.toFixed(2)}
+                </span>
               )}
             </div>
-            
-            {/* Product Info */}
-            <div className="space-y-6">
-              {/* Breadcrumbs */}
-              <div className="flex items-center text-sm text-gray-500 mb-2">
-                <Link to="/" className="hover:text-amber-600">Home</Link>
-                <span className="mx-2">/</span>
-                <Link to="/products" className="hover:text-amber-600">Products</Link>
-                {product.category_id && (
-                  <>
-                    <span className="mx-2">/</span>
-                    <span>{product.category_id}</span>
-                  </>
-                )}
-              </div>
-              
-              <h1 className="text-3xl font-bold text-gray-900">{product.name}</h1>
-              
-              {/* Rating */}
-              <div className="flex items-center gap-1">
-                <div className="flex items-center text-amber-500">
-                  {'★'.repeat(Math.round(product.rating))}
-                  {'☆'.repeat(5 - Math.round(product.rating))}
-                </div>
-                <span className="text-gray-500 ml-1">({product.rating.toFixed(1)})</span>
-                <span className="text-gray-400 mx-2">|</span>
-                <span className="text-gray-500">{reviews.length} reviews</span>
-              </div>
-              
-              {/* Price */}
-              <div className="flex items-baseline gap-3">
-                <span className="text-2xl font-bold text-amber-600">₹{calculatedPrice.toFixed(2)}</span>
-                {quantity > 4 && (
-                  <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50">
-                    Volume Discount Applied
-                  </Badge>
-                )}
-              </div>
-              
-              {/* Original Price Info */}
-              {product.sale_price ? (
-                <div className="text-sm text-gray-500">
-                  Regular price: <span className="line-through">₹{product.price}</span>
-                  <span className="ml-2 text-green-600">Save {Math.round((1 - product.sale_price/product.price) * 100)}%</span>
-                </div>
-              ) : null}
-              
-              {/* Description */}
-              <p className="text-gray-600">{product.description}</p>
-              
-              {/* Details */}
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                {product.origin && (
-                  <div>
-                    <span className="font-medium text-gray-700">Origin:</span> {product.origin}
-                  </div>
-                )}
-                {product.shelf_life && (
-                  <div>
-                    <span className="font-medium text-gray-700">Shelf Life:</span> {product.shelf_life}
-                  </div>
-                )}
-                {product.weight && (
-                  <div>
-                    <span className="font-medium text-gray-700">Weight:</span> {product.weight}
-                  </div>
-                )}
-                {product.use_case && (
-                  <div>
-                    <span className="font-medium text-gray-700">Use Case:</span> {product.use_case}
-                  </div>
-                )}
-              </div>
-              
-              {/* Tags */}
-              {product.tags && product.tags.length > 0 && (
+
+            {/* Description */}
+            <p className="text-gray-700 mb-6">{product.description}</p>
+
+            {/* Pack Size Selection */}
+            {product.pack_sizes && product.pack_sizes.length > 0 && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Pack Size
+                </label>
                 <div className="flex flex-wrap gap-2">
-                  {product.tags.map((tag, index) => (
-                    <Badge key={index} variant="outline" className="bg-gray-50">
-                      {tag}
-                    </Badge>
+                  {product.pack_sizes.map((size) => (
+                    <button
+                      key={size}
+                      onClick={() => setSelectedPackSize(size)}
+                      className={`px-4 py-2 border rounded-md text-sm ${
+                        selectedPackSize === size
+                          ? 'border-amber-600 bg-amber-50 text-amber-600'
+                          : 'border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      {size}
+                    </button>
                   ))}
                 </div>
-              )}
-              
-              {/* Pack Size */}
-              {product.pack_sizes && product.pack_sizes.length > 0 && (
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">Pack Size</label>
-                  <Select
-                    value={selectedPackSize}
-                    onValueChange={(value) => {
-                      setSelectedPackSize(value);
-                      setQuantity(1);
-                    }}
-                  >
-                    <SelectTrigger className="w-full sm:w-48">
-                      <SelectValue placeholder="Select size" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {product.pack_sizes.map((size) => {
-                        let displayPrice = product.price;
-                        if (product.pack_prices) {
-                          const packPricing = product.pack_prices.find(p => p.pack_size === size);
-                          if (packPricing) {
-                            displayPrice = packPricing.price;
-                          }
-                        }
-                        
-                        return (
-                          <SelectItem key={size} value={size}>
-                            {size} - ₹{displayPrice}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              
-              {/* Quantity */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Quantity</label>
-                <div className="flex items-center">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => handleQuantityChange(-1)}
-                    disabled={quantity <= 1}
-                  >
-                    <Minus size={16} />
-                  </Button>
-                  <span className="w-12 text-center">{quantity}</span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => handleQuantityChange(1)}
-                    disabled={quantity >= 20}
-                  >
-                    <Plus size={16} />
-                  </Button>
-                </div>
               </div>
-              
-              {/* Actions */}
-              <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                <Button
-                  className="bg-amber-600 hover:bg-amber-700 flex-grow"
-                  onClick={handleAddToCart}
-                  disabled={addingToCart}
+            )}
+
+            {/* Quantity */}
+            <div className="mb-8">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Quantity
+              </label>
+              <div className="flex items-center">
+                <button
+                  onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
+                  className="h-10 w-10 border border-gray-300 flex items-center justify-center rounded-l-md"
                 >
-                  <ShoppingCart className="mr-2 h-4 w-4" />
-                  Add to Cart
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  className={`flex-grow ${inWishlist ? 'text-red-500 border-red-500 hover:bg-red-50' : ''}`}
-                  onClick={toggleWishlist}
-                  disabled={wishlistLoading}
+                  -
+                </button>
+                <input
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="h-10 w-16 border-y border-gray-300 text-center"
+                />
+                <button
+                  onClick={() => setQuantity(prev => prev + 1)}
+                  className="h-10 w-10 border border-gray-300 flex items-center justify-center rounded-r-md"
                 >
-                  <Heart className={`mr-2 h-4 w-4 ${inWishlist ? 'fill-red-500' : ''}`} />
-                  {inWishlist ? 'In Wishlist' : 'Add to Wishlist'}
-                </Button>
+                  +
+                </button>
               </div>
+            </div>
 
-              {/* Bulk & Gift options */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                {product.is_bulk_available && (
-                  <Dialog open={isBulkOrderOpen} onOpenChange={setIsBulkOrderOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full text-blue-600 border-blue-200 hover:bg-blue-50">
-                        <Users className="mr-2 h-4 w-4" />
-                        Bulk Order Inquiry
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Request Bulk Order</DialogTitle>
-                        <DialogDescription>
-                          Fill out the form below to request pricing for bulk orders of {product.name}.
-                        </DialogDescription>
-                      </DialogHeader>
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-4">
+              <Button 
+                onClick={addToCart}
+                className="flex-1 md:flex-none"
+                size="lg"
+              >
+                <ShoppingCart className="mr-2 h-5 w-5" />
+                Add to Cart
+              </Button>
+              <Button 
+                onClick={toggleWishlist}
+                variant={isWishlisted ? "default" : "outline"} 
+                size="lg"
+                className={isWishlisted ? "bg-red-500 hover:bg-red-600" : ""}
+              >
+                <Heart className={`mr-2 h-5 w-5 ${isWishlisted ? "fill-current" : ""}`} />
+                {isWishlisted ? "In Wishlist" : "Add to Wishlist"}
+              </Button>
+              <Button variant="outline" size="icon" className="h-12 w-12">
+                <Share2 className="h-5 w-5" />
+              </Button>
+            </div>
 
-                      <Form {...bulkOrderForm}>
-                        <form onSubmit={bulkOrderForm.handleSubmit(onBulkOrderSubmit)} className="space-y-4">
-                          <FormField
-                            control={bulkOrderForm.control}
-                            name="quantity"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Quantity</FormLabel>
-                                <FormControl>
-                                  <Input 
-                                    type="number" 
-                                    min="10"
-                                    {...field}
-                                    onChange={(e) => field.onChange(parseInt(e.target.value))}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+            {/* Product Metadata */}
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {product.origin && (
+                <div className="flex items-center">
+                  <MapPin className="h-5 w-5 text-amber-600 mr-2" />
+                  <span className="text-sm text-gray-600">
+                    <span className="font-medium">Origin:</span> {product.origin}
+                  </span>
+                </div>
+              )}
+              {product.shelf_life && (
+                <div className="flex items-center">
+                  <Clock className="h-5 w-5 text-amber-600 mr-2" />
+                  <span className="text-sm text-gray-600">
+                    <span className="font-medium">Shelf Life:</span> {product.shelf_life}
+                  </span>
+                </div>
+              )}
+              {product.is_gift_suitable && (
+                <div className="flex items-center">
+                  <Gift className="h-5 w-5 text-amber-600 mr-2" />
+                  <span className="text-sm text-gray-600">
+                    <span className="font-medium">Gift Suitable:</span> Yes
+                  </span>
+                </div>
+              )}
+              {product.is_bulk_available && (
+                <div className="flex items-center">
+                  <ShoppingBag className="h-5 w-5 text-amber-600 mr-2" />
+                  <span className="text-sm text-gray-600">
+                    <span className="font-medium">Bulk Available:</span> Yes
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
-                          <FormField
-                            control={bulkOrderForm.control}
-                            name="packSize"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Pack Size</FormLabel>
-                                <Select
-                                  value={field.value}
-                                  onValueChange={field.onChange}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a pack size" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {product.pack_sizes?.map((size) => (
-                                      <SelectItem key={size} value={size}>
-                                        {size}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={bulkOrderForm.control}
-                            name="companyName"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Company Name</FormLabel>
-                                <FormControl>
-                                  <Input {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <FormField
-                              control={bulkOrderForm.control}
-                              name="email"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Email</FormLabel>
-                                  <FormControl>
-                                    <Input {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-
-                            <FormField
-                              control={bulkOrderForm.control}
-                              name="phone"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Phone Number</FormLabel>
-                                  <FormControl>
-                                    <Input {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-
-                          <FormField
-                            control={bulkOrderForm.control}
-                            name="message"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Additional Requirements (Optional)</FormLabel>
-                                <FormControl>
-                                  <Textarea {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <DialogFooter>
-                            <Button type="submit" className="bg-amber-600 hover:bg-amber-700">
-                              Submit Inquiry
-                            </Button>
-                          </DialogFooter>
-                        </form>
-                      </Form>
-                    </DialogContent>
-                  </Dialog>
-                )}
-
-                {product.is_gift_suitable && (
-                  <Dialog open={isGiftOpen} onOpenChange={setIsGiftOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full text-purple-600 border-purple-200 hover:bg-purple-50">
-                        <Gift className="mr-2 h-4 w-4" />
-                        Send as Gift
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Send {product.name} as a Gift</DialogTitle>
-                        <DialogDescription>
-                          Fill out the details below to send this product as a gift.
-                        </DialogDescription>
-                      </DialogHeader>
-
-                      <Form {...giftForm}>
-                        <form onSubmit={giftForm.handleSubmit(onGiftSubmit)} className="space-y-4">
-                          <FormField
-                            control={giftForm.control}
-                            name="quantity"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Quantity</FormLabel>
-                                <FormControl>
-                                  <Input 
-                                    type="number" 
-                                    min="1"
-                                    {...field}
-                                    onChange={(e) => field.onChange(parseInt(e.target.value))}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={giftForm.control}
-                            name="packSize"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Pack Size</FormLabel>
-                                <Select
-                                  value={field.value}
-                                  onValueChange={field.onChange}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a pack size" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {product.pack_sizes?.map((size) => (
-                                      <SelectItem key={size} value={size}>
-                                        {size}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={giftForm.control}
-                            name="recipientName"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Recipient's Name</FormLabel>
-                                <FormControl>
-                                  <Input {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={giftForm.control}
-                            name="recipientEmail"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Recipient's Email</FormLabel>
-                                <FormControl>
-                                  <Input {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={giftForm.control}
-                            name="message"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Gift Message (Optional)</FormLabel>
-                                <FormControl>
-                                  <Textarea {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={giftForm.control}
-                            name="giftWrap"
-                            render={({ field }) => (
-                              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                                <FormControl>
-                                  <input
-                                    type="checkbox"
-                                    className="h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
-                                    checked={field.value}
-                                    onChange={(e) => field.onChange(e.target.checked)}
-                                  />
-                                </FormControl>
-                                <div className="space-y-1 leading-none">
-                                  <FormLabel>Include Gift Wrapping</FormLabel>
-                                </div>
-                              </FormItem>
-                            )}
-                          />
-
-                          <DialogFooter>
-                            <Button type="submit" className="bg-amber-600 hover:bg-amber-700">
-                              Send Gift
-                            </Button>
-                          </DialogFooter>
-                        </form>
-                      </Form>
-                    </DialogContent>
-                  </Dialog>
-                )}
+        {/* Recipe Ideas */}
+        <div className="mb-16">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Recipe Ideas</h2>
+          <div className="bg-amber-50 p-6 rounded-lg">
+            <h3 className="text-xl font-semibold mb-4">Traditional Masala Chai</h3>
+            <div className="grid md:grid-cols-2 gap-8">
+              <div>
+                <h4 className="font-medium mb-2">Ingredients:</h4>
+                <ul className="list-disc list-inside space-y-1 text-gray-700">
+                  <li>2 cups water</li>
+                  <li>1 inch fresh ginger, crushed</li>
+                  <li>4 cardamom pods, crushed</li>
+                  <li>2 cloves</li>
+                  <li>1 cinnamon stick</li>
+                  <li>1 star anise</li>
+                  <li>2 cups milk</li>
+                  <li>2 tbsp sugar (or to taste)</li>
+                  <li>2 tbsp loose black tea leaves</li>
+                </ul>
               </div>
-              
-              {/* Benefits */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 text-sm border-t border-gray-100 mt-6 pt-6">
-                <div className="flex items-center">
-                  <PackageCheck className="mr-2 h-5 w-5 text-amber-600" />
-                  <span className="text-gray-700">Premium Quality</span>
-                </div>
-                <div className="flex items-center">
-                  <Truck className="mr-2 h-5 w-5 text-amber-600" />
-                  <span className="text-gray-700">Fast Delivery</span>
-                </div>
-                <div className="flex items-center">
-                  <RefreshCw className="mr-2 h-5 w-5 text-amber-600" />
-                  <span className="text-gray-700">Easy Returns</span>
-                </div>
+              <div>
+                <h4 className="font-medium mb-2">Instructions:</h4>
+                <ol className="list-decimal list-inside space-y-2 text-gray-700">
+                  <li>Bring water to a boil in a saucepan</li>
+                  <li>Add ginger, cardamom, cloves, cinnamon and star anise. Simmer for 2 minutes</li>
+                  <li>Add milk and sugar, bring to a simmer</li>
+                  <li>Add tea leaves, simmer for 2 minutes</li>
+                  <li>Strain and serve hot</li>
+                </ol>
               </div>
             </div>
           </div>
         </div>
-        
-        {/* Product Details Tabs */}
-        <div className="mt-8 bg-white rounded-xl shadow-sm overflow-hidden">
-          <Tabs defaultValue="description" className="p-6">
-            <TabsList className="grid w-full grid-cols-4 mb-8">
-              <TabsTrigger value="description">Description</TabsTrigger>
-              <TabsTrigger value="additional">Additional Info</TabsTrigger>
-              <TabsTrigger value="recipes">Recipes</TabsTrigger>
-              <TabsTrigger value="reviews">Reviews ({reviews.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="description">
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="prose max-w-none">
-                    <h3 className="text-xl font-semibold mb-4">Product Description</h3>
-                    <p>{product.description}</p>
-                    
-                    {product.use_case && (
-                      <>
-                        <h4 className="text-lg font-semibold mt-4 mb-2">Uses</h4>
-                        <p>{product.use_case}</p>
-                      </>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            <TabsContent value="additional">
-              <Card>
-                <CardContent className="pt-6">
-                  <h3 className="text-xl font-semibold mb-4">Additional Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex flex-col space-y-4">
-                      {product.weight && (
-                        <div className="grid grid-cols-2 border-b pb-2">
-                          <span className="font-medium">Weight</span>
-                          <span>{product.weight}</span>
-                        </div>
-                      )}
-                      {product.origin && (
-                        <div className="grid grid-cols-2 border-b pb-2">
-                          <span className="font-medium">Origin</span>
-                          <span>{product.origin}</span>
-                        </div>
-                      )}
-                      {product.shelf_life && (
-                        <div className="grid grid-cols-2 border-b pb-2">
-                          <span className="font-medium">Shelf Life</span>
-                          <span>{product.shelf_life}</span>
-                        </div>
-                      )}
-                      {product.is_gift_suitable !== undefined && (
-                        <div className="grid grid-cols-2 border-b pb-2">
-                          <span className="font-medium">Gift Suitable</span>
-                          <span>{product.is_gift_suitable ? 'Yes' : 'No'}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-col space-y-4">
-                      {product.is_bulk_available !== undefined && (
-                        <div className="grid grid-cols-2 border-b pb-2">
-                          <span className="font-medium">Bulk Available</span>
-                          <span>{product.is_bulk_available ? 'Yes' : 'No'}</span>
-                        </div>
-                      )}
-                      {product.pack_sizes && (
-                        <div className="grid grid-cols-2 border-b pb-2">
-                          <span className="font-medium">Available Sizes</span>
-                          <span>{product.pack_sizes.join(', ')}</span>
-                        </div>
-                      )}
-                      {product.hs_code && (
-                        <div className="grid grid-cols-2 border-b pb-2">
-                          <span className="font-medium">HS Code</span>
-                          <span>{product.hs_code}</span>
-                        </div>
-                      )}
-                      {product.sourcing && (
-                        <div className="grid grid-cols-2 border-b pb-2">
-                          <span className="font-medium">Sourcing</span>
-                          <span>{product.sourcing}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            <TabsContent value="recipes">
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="prose max-w-none">
-                    <h3 className="text-xl font-semibold mb-4">Delicious Recipes Using {product.name}</h3>
-                    
-                    {/* Recipe 1 */}
-                    <div className="mb-8 border rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
-                      <h4 className="text-lg font-semibold text-amber-700">Traditional {product.name} Recipe</h4>
-                      <div className="flex flex-col md:flex-row md:gap-8 mt-4">
-                        <div className="md:w-1/3">
-                          <img 
-                            src={`https://source.unsplash.com/random/300x200/?${product.name.split(' ')[0]},food`} 
-                            alt="Recipe" 
-                            className="rounded-lg w-full h-48 object-cover mb-4"
-                          />
-                          <div className="flex justify-between text-sm text-gray-600 mb-4">
-                            <span>Prep: 15 mins</span>
-                            <span>Cook: 30 mins</span>
-                            <span>Serves: 4</span>
-                          </div>
-                        </div>
-                        <div className="md:w-2/3">
-                          <h5 className="font-medium mb-2">Ingredients:</h5>
-                          <ul className="list-disc pl-5 mb-4 text-gray-700">
-                            <li>{product.name} - {product.pack_sizes?.[0] || '100g'}</li>
-                            <li>Onions - 2 medium, finely chopped</li>
-                            <li>Tomatoes - 3, chopped</li>
-                            <li>Vegetable oil - 2 tbsp</li>
-                            <li>Salt and pepper to taste</li>
-                            <li>Fresh herbs for garnish</li>
-                          </ul>
-                          
-                          <h5 className="font-medium mb-2">Instructions:</h5>
-                          <ol className="list-decimal pl-5 text-gray-700">
-                            <li>Heat oil in a large pan over medium heat</li>
-                            <li>Add onions and sauté until translucent</li>
-                            <li>Add {product.name} and cook for 5-7 minutes</li>
-                            <li>Stir in chopped tomatoes and cook for another 5 minutes</li>
-                            <li>Season with salt and pepper</li>
-                            <li>Garnish with fresh herbs before serving</li>
-                          </ol>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Recipe 2 */}
-                    <div className="border rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
-                      <h4 className="text-lg font-semibold text-amber-700">Modern Fusion with {product.name}</h4>
-                      <div className="flex flex-col md:flex-row md:gap-8 mt-4">
-                        <div className="md:w-1/3">
-                          <img 
-                            src={`https://source.unsplash.com/random/300x200/?${product.name.split(' ')[0]},cooking`} 
-                            alt="Recipe" 
-                            className="rounded-lg w-full h-48 object-cover mb-4"
-                          />
-                          <div className="flex justify-between text-sm text-gray-600 mb-4">
-                            <span>Prep: 20 mins</span>
-                            <span>Cook: 25 mins</span>
-                            <span>Serves: 2</span>
-                          </div>
-                        </div>
-                        <div className="md:w-2/3">
-                          <h5 className="font-medium mb-2">Ingredients:</h5>
-                          <ul className="list-disc pl-5 mb-4 text-gray-700">
-                            <li>{product.name} - {product.pack_sizes?.[0] || '100g'}</li>
-                            <li>Olive oil - 3 tbsp</li>
-                            <li>Garlic - 3 cloves, minced</li>
-                            <li>Fresh vegetables - 2 cups, mixed</li>
-                            <li>Lemon juice - 1 tbsp</li>
-                            <li>Mixed herbs - 1 tsp</li>
-                          </ul>
-                          
-                          <h5 className="font-medium mb-2">Instructions:</h5>
-                          <ol className="list-decimal pl-5 text-gray-700">
-                            <li>Heat olive oil in a pan over medium heat</li>
-                            <li>Add garlic and sauté for 1 minute</li>
-                            <li>Add mixed vegetables and cook until tender</li>
-                            <li>Incorporate {product.name} and cook for another 3-5 minutes</li>
-                            <li>Sprinkle with mixed herbs and a squeeze of lemon juice</li>
-                            <li>Serve hot as a side dish or main course</li>
-                          </ol>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            <TabsContent value="reviews">
-              <Card>
-                <CardContent className="pt-6">
-                  <h3 className="text-xl font-semibold mb-4">Customer Reviews</h3>
-                  
-                  {/* Write a Review */}
-                  {user ? (
-                    <div className="mb-8 p-4 bg-gray-50 rounded-lg">
-                      <h4 className="text-lg font-medium mb-4">Write a Review</h4>
-                      <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onReviewSubmit)} className="space-y-4">
-                          <FormField
-                            control={form.control}
-                            name="rating"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Rating</FormLabel>
-                                <FormControl>
-                                  <div className="flex gap-1">
-                                    {[1, 2, 3, 4, 5].map((rating) => (
-                                      <button
-                                        key={rating}
-                                        type="button"
-                                        onClick={() => {
-                                          setSelectedRating(rating);
-                                          field.onChange(rating);
-                                        }}
-                                        className="text-2xl focus:outline-none"
-                                      >
-                                        <Star 
-                                          className={`w-8 h-8 ${rating <= selectedRating ? 'text-amber-500 fill-amber-500' : 'text-gray-300'}`} 
-                                        />
-                                      </button>
-                                    ))}
-                                  </div>
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          
-                          <FormField
-                            control={form.control}
-                            name="comment"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Your Review</FormLabel>
-                                <FormControl>
-                                  <Textarea 
-                                    placeholder="Share your experience with this product..."
-                                    className="resize-none"
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          
-                          <Button 
-                            type="submit" 
-                            className="bg-amber-600 hover:bg-amber-700"
-                            disabled={addingReview}
-                          >
-                            Submit Review
-                          </Button>
-                        </form>
-                      </Form>
-                    </div>
-                  ) : (
-                    <div className="mb-8 p-4 bg-gray-50 rounded-lg text-center">
-                      <p className="mb-4">Please sign in to leave a review</p>
-                      <Button asChild>
-                        <Link to="/login">Sign In</Link>
-                      </Button>
-                    </div>
-                  )}
-                  
-                  {/* Reviews List */}
-                  {reviews.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">No reviews yet. Be the first to review this product!</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      {reviews.map((review) => (
-                        <div key={review.id} className="border-b pb-4 mb-4 last:border-0">
-                          <div className="flex justify-between mb-2">
-                            <div className="flex items-center gap-1 text-amber-500">
-                              {'★'.repeat(review.rating)}
-                              {'☆'.repeat(5 - review.rating)}
-                            </div>
-                            <span className="text-sm text-gray-500">
-                              {format(new Date(review.created_at), 'MMM d, yyyy')}
-                            </span>
-                          </div>
-                          <p className="text-gray-700">{review.comment}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
-        
+
         {/* Related Products */}
         {relatedProducts.length > 0 && (
-          <div className="mt-16">
-            <h2 className="text-2xl font-bold text-gray-900 mb-8">Related Products</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {relatedProducts.map((product) => (
-                <ProductCard key={product.id} product={product} />
+          <div className="mb-16">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">You May Also Like</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {relatedProducts.map((relatedProduct) => (
+                <ProductCard key={relatedProduct.id} product={relatedProduct} />
               ))}
             </div>
           </div>
         )}
+
+        {/* Product Tabs */}
+        <Tabs defaultValue="details" className="mb-12">
+          <TabsList className="w-full border-b border-gray-200 mb-6">
+            <TabsTrigger value="details" className="py-3 px-5">Product Details</TabsTrigger>
+            <TabsTrigger value="reviews" className="py-3 px-5">Customer Reviews</TabsTrigger>
+            <TabsTrigger value="shipping" className="py-3 px-5">Shipping Information</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="details" className="p-6 bg-white rounded-lg shadow-sm">
+            <div className="space-y-4">
+              <p>{product.description}</p>
+              
+              {/* Product Tags */}
+              {product.tags && product.tags.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-medium mb-2">Tags:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {product.tags.map((tag, index) => (
+                      <span key={index} className="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Use Cases */}
+              {product.use_case && (
+                <div>
+                  <h4 className="font-medium mb-2">Use Cases:</h4>
+                  <p className="text-gray-700">{product.use_case}</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="reviews" className="p-6 bg-white rounded-lg shadow-sm">
+            {reviews.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-600">No reviews yet. Be the first to review this product!</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {reviews.map((review) => (
+                  <Card key={review.id} className="p-4">
+                    <div className="flex items-center mb-2">
+                      <div className="flex mr-2">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star 
+                            key={i}
+                            className={`h-4 w-4 ${i < review.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-sm text-gray-500">
+                        {new Date(review.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="text-gray-700">{review.comment}</p>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="shipping" className="p-6 bg-white rounded-lg shadow-sm">
+            <div className="space-y-4">
+              <div className="flex items-start">
+                <Check className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
+                <div>
+                  <h4 className="font-medium">Free Shipping</h4>
+                  <p className="text-gray-600">On orders over ₹500</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start">
+                <Info className="h-5 w-5 text-amber-500 mr-2 mt-0.5" />
+                <div>
+                  <h4 className="font-medium">Shipping Time</h4>
+                  <p className="text-gray-600">3-5 business days for standard shipping</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start">
+                <Package className="h-5 w-5 text-blue-500 mr-2 mt-0.5" />
+                <div>
+                  <h4 className="font-medium">Packaging</h4>
+                  <p className="text-gray-600">All products are carefully packaged to ensure they arrive in perfect condition</p>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </MainLayout>
   );
-};
-
-export default ProductDetailPage;
+}
