@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -143,6 +142,7 @@ const ProductDetailPage = () => {
         
         // Fetch related products if we have a category
         if (productData.category_id) {
+          // Convert to string first to fix type error
           const related = await getRelatedProducts(productData.category_id, productData.id, 4);
           setRelatedProducts(related);
         }
@@ -168,6 +168,15 @@ const ProductDetailPage = () => {
     if (!product) return;
     
     let basePrice = product.sale_price || product.price;
+    
+    // Check if we have pack-specific pricing
+    if (product.pack_prices && product.pack_prices.length > 0 && selectedPackSize) {
+      const packPricing = product.pack_prices.find(p => p.pack_size === selectedPackSize);
+      if (packPricing) {
+        basePrice = packPricing.sale_price || packPricing.price;
+      }
+    }
+    
     let finalPrice = basePrice * quantity;
     
     // Apply volume discounts if quantity >= 5
@@ -180,7 +189,7 @@ const ProductDetailPage = () => {
     }
     
     setCalculatedPrice(finalPrice);
-  }, [quantity, product]);
+  }, [quantity, product, selectedPackSize]);
   
   const handleQuantityChange = (change: number) => {
     const newQuantity = quantity + change;
@@ -501,17 +510,30 @@ const ProductDetailPage = () => {
                   <label className="block text-sm font-medium text-gray-700">Pack Size</label>
                   <Select
                     value={selectedPackSize}
-                    onValueChange={setSelectedPackSize}
+                    onValueChange={(value) => {
+                      setSelectedPackSize(value);
+                      setQuantity(1);
+                    }}
                   >
                     <SelectTrigger className="w-full sm:w-48">
                       <SelectValue placeholder="Select size" />
                     </SelectTrigger>
                     <SelectContent>
-                      {product.pack_sizes.map((size) => (
-                        <SelectItem key={size} value={size}>
-                          {size}
-                        </SelectItem>
-                      ))}
+                      {product.pack_sizes.map((size) => {
+                        let displayPrice = product.price;
+                        if (product.pack_prices) {
+                          const packPricing = product.pack_prices.find(p => p.pack_size === size);
+                          if (packPricing) {
+                            displayPrice = packPricing.price;
+                          }
+                        }
+                        
+                        return (
+                          <SelectItem key={size} value={size}>
+                            {size} - ₹{displayPrice}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>

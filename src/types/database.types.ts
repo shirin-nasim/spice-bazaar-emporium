@@ -17,6 +17,12 @@ export interface Subcategory {
   created_at: string;
 }
 
+export interface ProductPricing {
+  pack_size: string;
+  price: number;
+  sale_price?: number | null;
+}
+
 export interface Product {
   id: number;
   name: string;
@@ -29,6 +35,7 @@ export interface Product {
   origin: string | null;
   use_case: string | null;
   pack_sizes: string[] | null;
+  pack_prices?: ProductPricing[] | null;
   shelf_life: string | null;
   is_gift_suitable: boolean;
   is_bulk_available: boolean;

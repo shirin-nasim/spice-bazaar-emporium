@@ -1,268 +1,107 @@
 
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { GiftBox } from '@/types/database.types';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+import { Edit, Trash, Plus, ImagePlus } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { 
-  Search, 
-  Plus, 
-  Pencil, 
-  Trash2, 
-  RefreshCw,
-  Gift
-} from 'lucide-react';
-import { useDebounce } from '@/hooks/use-debounce';
-
-interface GiftBox {
-  id: number;
-  name: string;
-  slug: string;
-  description: string;
-  price: number;
-  image_url: string;
-  items: string[];
-  featured: boolean;
-  created_at: string;
-}
-
-const giftBoxSchema = z.object({
-  name: z.string().min(3, 'Name must be at least 3 characters'),
-  slug: z.string().min(3, 'Slug must be at least 3 characters'),
-  description: z.string().min(10, 'Description must be at least 10 characters'),
-  price: z.coerce.number().positive('Price must be positive'),
-  image_url: z.string().url('Must be a valid URL'),
-  items: z.string().transform(value => value.split('\n').filter(item => item.trim() !== '')),
-  featured: z.boolean().default(false)
-});
-
-type GiftBoxFormValues = z.infer<typeof giftBoxSchema>;
 
 const GiftBoxesTab = () => {
   const { toast } = useToast();
   const [giftBoxes, setGiftBoxes] = useState<GiftBox[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const debouncedSearch = useDebounce(search, 500);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [currentGiftBox, setCurrentGiftBox] = useState<GiftBox | null>(null);
-  
-  const createForm = useForm<GiftBoxFormValues>({
-    resolver: zodResolver(giftBoxSchema),
-    defaultValues: {
-      name: '',
-      slug: '',
-      description: '',
-      price: 0,
-      image_url: '',
-      items: '',
-      featured: false
-    }
-  });
-  
-  const editForm = useForm<GiftBoxFormValues>({
-    resolver: zodResolver(giftBoxSchema),
-    defaultValues: {
-      name: '',
-      slug: '',
-      description: '',
-      price: 0,
-      image_url: '',
-      items: '',
-      featured: false
-    }
-  });
-  
+
+  // Form state
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [description, setDescription] = useState('');
+  const [price, setPrice] = useState('');
+  const [items, setItems] = useState<string[]>([]);
+  const [itemsText, setItemsText] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [featured, setFeatured] = useState(false);
+
   useEffect(() => {
-    const fetchGiftBoxes = async () => {
-      setLoading(true);
-      
-      let query = supabase
-        .from('gift_boxes')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (debouncedSearch) {
-        query = query.ilike('name', `%${debouncedSearch}%`);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) {
-        console.error('Error fetching gift boxes:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to load gift boxes',
-          variant: 'destructive',
-        });
-      } else {
-        setGiftBoxes(data || []);
-      }
-      
-      setLoading(false);
-    };
-    
     fetchGiftBoxes();
-  }, [debouncedSearch, refreshTrigger, toast]);
-  
-  useEffect(() => {
-    const subscription = createForm.watch((value, { name }) => {
-      if (name === 'name') {
-        const slug = value.name
-          ?.toLowerCase()
-          .replace(/[^\w\s-]/g, '')
-          .replace(/\s+/g, '-');
-        
-        createForm.setValue('slug', slug || '');
-      }
-    });
-    
-    return () => subscription.unsubscribe();
-  }, [createForm]);
-  
-  useEffect(() => {
-    if (currentGiftBox && isEditDialogOpen) {
-      editForm.reset({
-        name: currentGiftBox.name,
-        slug: currentGiftBox.slug,
-        description: currentGiftBox.description,
-        price: currentGiftBox.price,
-        image_url: currentGiftBox.image_url,
-        items: currentGiftBox.items.join('\n'),
-        featured: currentGiftBox.featured
-      });
-    }
-  }, [currentGiftBox, isEditDialogOpen, editForm]);
-  
-  const onCreateSubmit = async (data: GiftBoxFormValues) => {
+  }, []);
+
+  const fetchGiftBoxes = async () => {
+    setLoading(true);
     try {
-      const { error } = await supabase
-        .from('gift_boxes')
-        .insert([{
-          name: data.name,
-          slug: data.slug,
-          description: data.description,
-          price: data.price,
-          image_url: data.image_url,
-          items: data.items,
-          featured: data.featured
-        }]);
+      const { data, error } = await supabase.from('gift_boxes').select('*');
       
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       
-      toast({
-        title: 'Gift Box Created',
-        description: `Successfully created ${data.name}`,
-      });
-      
-      setIsCreateDialogOpen(false);
-      createForm.reset();
-      setRefreshTrigger(prev => prev + 1);
+      setGiftBoxes(data || []);
     } catch (error) {
-      console.error('Error creating gift box:', error);
+      console.error('Error fetching gift boxes:', error);
       toast({
         title: 'Error',
-        description: 'Failed to create gift box',
+        description: 'Failed to load gift boxes',
         variant: 'destructive',
       });
+    } finally {
+      setLoading(false);
     }
   };
-  
-  const onEditSubmit = async (data: GiftBoxFormValues) => {
-    if (!currentGiftBox) return;
-    
-    try {
-      const { error } = await supabase
-        .from('gift_boxes')
-        .update({
-          name: data.name,
-          slug: data.slug,
-          description: data.description,
-          price: data.price,
-          image_url: data.image_url,
-          items: data.items,
-          featured: data.featured
-        })
-        .eq('id', currentGiftBox.id);
-      
-      if (error) {
-        throw error;
-      }
-      
-      toast({
-        title: 'Gift Box Updated',
-        description: `Successfully updated ${data.name}`,
-      });
-      
-      setIsEditDialogOpen(false);
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error) {
-      console.error('Error updating gift box:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update gift box',
-        variant: 'destructive',
-      });
-    }
+
+  const handleAddGiftBox = () => {
+    setIsEditing(false);
+    setCurrentGiftBox(null);
+    resetForm();
+    setDialogOpen(true);
   };
-  
-  const handleDelete = async () => {
-    if (!currentGiftBox) return;
+
+  const handleEditGiftBox = (giftBox: GiftBox) => {
+    setIsEditing(true);
+    setCurrentGiftBox(giftBox);
+    
+    setName(giftBox.name);
+    setSlug(giftBox.slug);
+    setDescription(giftBox.description);
+    setPrice(giftBox.price.toString());
+    
+    // Fix: Convert items to array if needed
+    const itemsArray = Array.isArray(giftBox.items) ? giftBox.items : [giftBox.items];
+    setItems(itemsArray);
+    setItemsText(itemsArray.join('\n'));
+    
+    setImageUrl(giftBox.image_url || '');
+    setFeatured(giftBox.featured || false);
+    
+    setDialogOpen(true);
+  };
+
+  const handleDeleteGiftBox = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this gift box?')) return;
     
     try {
-      const { error } = await supabase
-        .from('gift_boxes')
-        .delete()
-        .eq('id', currentGiftBox.id);
+      const { error } = await supabase.from('gift_boxes').delete().eq('id', id);
       
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
+      
+      setGiftBoxes(giftBoxes.filter(box => box.id !== id));
       
       toast({
-        title: 'Gift Box Deleted',
-        description: `Successfully deleted ${currentGiftBox.name}`,
+        title: 'Success',
+        description: 'Gift box deleted successfully',
       });
-      
-      setIsDeleteDialogOpen(false);
-      setCurrentGiftBox(null);
-      setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       console.error('Error deleting gift box:', error);
       toast({
@@ -272,436 +111,231 @@ const GiftBoxesTab = () => {
       });
     }
   };
-  
+
+  const handleSubmit = async () => {
+    try {
+      // Parse items from text area, one item per line
+      const parsedItems: string[] = itemsText.split('\n')
+        .map(item => item.trim())
+        .filter(item => item.length > 0);
+      
+      const giftBoxData = {
+        name,
+        slug,
+        description,
+        price: parseFloat(price),
+        items: parsedItems,
+        image_url: imageUrl,
+        featured,
+      };
+      
+      if (isEditing && currentGiftBox) {
+        const { error } = await supabase
+          .from('gift_boxes')
+          .update(giftBoxData)
+          .eq('id', currentGiftBox.id);
+        
+        if (error) throw error;
+        
+        setGiftBoxes(giftBoxes.map(box => 
+          box.id === currentGiftBox.id ? { ...box, ...giftBoxData } : box
+        ));
+        
+        toast({
+          title: 'Success',
+          description: 'Gift box updated successfully',
+        });
+      } else {
+        const { data, error } = await supabase
+          .from('gift_boxes')
+          .insert([giftBoxData])
+          .select();
+        
+        if (error) throw error;
+        
+        setGiftBoxes([...giftBoxes, data[0]]);
+        
+        toast({
+          title: 'Success',
+          description: 'Gift box created successfully',
+        });
+      }
+      
+      setDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving gift box:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save gift box',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const resetForm = () => {
+    setName('');
+    setSlug('');
+    setDescription('');
+    setPrice('');
+    setItems([]);
+    setItemsText('');
+    setImageUrl('');
+    setFeatured(false);
+  };
+
+  const handleSlugify = () => {
+    setSlug(name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''));
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <Input
-            type="text"
-            placeholder="Search gift boxes..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setRefreshTrigger(prev => prev + 1)}
-            disabled={loading}
-          >
-            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-          </Button>
-          
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-amber-600 hover:bg-amber-700">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Gift Box
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Add New Gift Box</DialogTitle>
-                <DialogDescription>
-                  Create a new gift box package for your customers.
-                </DialogDescription>
-              </DialogHeader>
-              
-              <Form {...createForm}>
-                <form onSubmit={createForm.handleSubmit(onCreateSubmit)} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={createForm.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Premium Gift Box" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={createForm.control}
-                      name="slug"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Slug</FormLabel>
-                          <FormControl>
-                            <Input placeholder="premium-gift-box" {...field} />
-                          </FormControl>
-                          <FormDescription>
-                            URL-friendly version of name
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={createForm.control}
-                      name="price"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Price</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.01" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={createForm.control}
-                      name="image_url"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Image URL</FormLabel>
-                          <FormControl>
-                            <Input placeholder="https://example.com/image.jpg" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  
-                  <FormField
-                    control={createForm.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="A beautiful gift box containing premium dry fruits and nuts..."
-                            className="resize-none min-h-24"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={createForm.control}
-                    name="items"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Items Included</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="200g Premium Cashews
-100g California Almonds
-100g Medjool Dates
-50g Pistachios"
-                            className="resize-none min-h-32"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Add each item on a new line
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={createForm.control}
-                    name="featured"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center space-x-2 space-y-0">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                        <FormLabel className="cursor-pointer">Featured Gift Box</FormLabel>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" className="bg-amber-600 hover:bg-amber-700">
-                      Create Gift Box
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
-        </div>
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">Gift Boxes</h2>
+        <Button onClick={handleAddGiftBox} className="bg-amber-600 hover:bg-amber-700">
+          <Plus className="mr-2 h-4 w-4" /> Add Gift Box
+        </Button>
       </div>
       
-      <div className="border rounded-md">
+      {loading ? (
+        <div className="py-10 text-center">
+          <div className="animate-spin h-8 w-8 border-4 border-amber-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading gift boxes...</p>
+        </div>
+      ) : giftBoxes.length === 0 ? (
+        <div className="py-10 text-center">
+          <p className="text-gray-600">No gift boxes found. Add a new gift box to get started.</p>
+        </div>
+      ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Image</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Price</TableHead>
-              <TableHead>Items Count</TableHead>
+              <TableHead>Items</TableHead>
               <TableHead>Featured</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading ? (
-              [...Array(3)].map((_, index) => (
-                <TableRow key={index}>
-                  <TableCell>
-                    <div className="w-12 h-12 rounded bg-gray-200 animate-pulse"></div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="h-4 w-16 bg-gray-200 rounded animate-pulse"></div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="h-4 w-12 bg-gray-200 rounded animate-pulse"></div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="h-4 w-12 bg-gray-200 rounded animate-pulse"></div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="h-8 w-24 bg-gray-200 rounded animate-pulse ml-auto"></div>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : giftBoxes.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-6">
-                  <div className="flex flex-col items-center">
-                    <Gift className="h-12 w-12 text-gray-300 mb-2" />
-                    <p className="text-gray-500">No gift boxes found</p>
-                  </div>
+            {giftBoxes.map((giftBox) => (
+              <TableRow key={giftBox.id}>
+                <TableCell className="font-medium">{giftBox.name}</TableCell>
+                <TableCell>₹{giftBox.price}</TableCell>
+                <TableCell>
+                  {Array.isArray(giftBox.items) ? giftBox.items.length : 0} items
+                </TableCell>
+                <TableCell>
+                  {giftBox.featured ? (
+                    <Badge className="bg-green-600">Featured</Badge>
+                  ) : (
+                    <Badge variant="outline">Standard</Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => handleEditGiftBox(giftBox)}>
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDeleteGiftBox(giftBox.id)}>
+                    <Trash className="h-4 w-4 text-red-500" />
+                  </Button>
                 </TableCell>
               </TableRow>
-            ) : (
-              giftBoxes.map((giftBox) => (
-                <TableRow key={giftBox.id}>
-                  <TableCell>
-                    <img 
-                      src={giftBox.image_url || '/placeholder.svg'} 
-                      alt={giftBox.name}
-                      className="w-12 h-12 object-cover rounded"
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium">{giftBox.name}</TableCell>
-                  <TableCell>₹{giftBox.price}</TableCell>
-                  <TableCell>{giftBox.items.length} items</TableCell>
-                  <TableCell>
-                    {giftBox.featured ? (
-                      <span className="inline-flex items-center text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded-full">
-                        Featured
-                      </span>
-                    ) : (
-                      <span className="text-sm text-gray-500">No</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end space-x-2">
-                      <Dialog open={isEditDialogOpen && currentGiftBox?.id === giftBox.id} onOpenChange={(open) => {
-                        setIsEditDialogOpen(open);
-                        if (open) setCurrentGiftBox(giftBox);
-                      }}>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                          <DialogHeader>
-                            <DialogTitle>Edit Gift Box</DialogTitle>
-                            <DialogDescription>
-                              Update the gift box details.
-                            </DialogDescription>
-                          </DialogHeader>
-                          
-                          <Form {...editForm}>
-                            <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <FormField
-                                  control={editForm.control}
-                                  name="name"
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>Name</FormLabel>
-                                      <FormControl>
-                                        <Input placeholder="Premium Gift Box" {...field} />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                                
-                                <FormField
-                                  control={editForm.control}
-                                  name="slug"
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>Slug</FormLabel>
-                                      <FormControl>
-                                        <Input placeholder="premium-gift-box" {...field} />
-                                      </FormControl>
-                                      <FormDescription>
-                                        URL-friendly version of name
-                                      </FormDescription>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                                
-                                <FormField
-                                  control={editForm.control}
-                                  name="price"
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>Price</FormLabel>
-                                      <FormControl>
-                                        <Input type="number" step="0.01" {...field} />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                                
-                                <FormField
-                                  control={editForm.control}
-                                  name="image_url"
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>Image URL</FormLabel>
-                                      <FormControl>
-                                        <Input placeholder="https://example.com/image.jpg" {...field} />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                              </div>
-                              
-                              <FormField
-                                control={editForm.control}
-                                name="description"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Description</FormLabel>
-                                    <FormControl>
-                                      <Textarea
-                                        placeholder="A beautiful gift box containing premium dry fruits and nuts..."
-                                        className="resize-none min-h-24"
-                                        {...field}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              
-                              <FormField
-                                control={editForm.control}
-                                name="items"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Items Included</FormLabel>
-                                    <FormControl>
-                                      <Textarea
-                                        placeholder="200g Premium Cashews
-100g California Almonds
-100g Medjool Dates
-50g Pistachios"
-                                        className="resize-none min-h-32"
-                                        {...field}
-                                      />
-                                    </FormControl>
-                                    <FormDescription>
-                                      Add each item on a new line
-                                    </FormDescription>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              
-                              <FormField
-                                control={editForm.control}
-                                name="featured"
-                                render={({ field }) => (
-                                  <FormItem className="flex items-center space-x-2 space-y-0">
-                                    <FormControl>
-                                      <Checkbox
-                                        checked={field.value}
-                                        onCheckedChange={field.onChange}
-                                      />
-                                    </FormControl>
-                                    <FormLabel className="cursor-pointer">Featured Gift Box</FormLabel>
-                                  </FormItem>
-                                )}
-                              />
-                              
-                              <DialogFooter>
-                                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                                  Cancel
-                                </Button>
-                                <Button type="submit" className="bg-amber-600 hover:bg-amber-700">
-                                  Save Changes
-                                </Button>
-                              </DialogFooter>
-                            </form>
-                          </Form>
-                        </DialogContent>
-                      </Dialog>
-                      
-                      <Dialog open={isDeleteDialogOpen && currentGiftBox?.id === giftBox.id} onOpenChange={(open) => {
-                        setIsDeleteDialogOpen(open);
-                        if (open) setCurrentGiftBox(giftBox);
-                      }}>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Delete Gift Box</DialogTitle>
-                            <DialogDescription>
-                              Are you sure you want to delete "{giftBox.name}"? This action cannot be undone.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <DialogFooter>
-                            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-                              Cancel
-                            </Button>
-                            <Button variant="destructive" onClick={handleDelete}>
-                              Delete
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
+            ))}
           </TableBody>
         </Table>
-      </div>
+      )}
+      
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{isEditing ? 'Edit Gift Box' : 'Add New Gift Box'}</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-4 gap-4">
+              <div className="col-span-3">
+                <label className="block text-sm font-medium mb-1">Name</label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onBlur={handleSlugify}
+                  placeholder="Premium Dry Fruit Box"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Price (₹)</label>
+                <Input
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="1299"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Slug</label>
+              <Input
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                placeholder="premium-dry-fruit-box"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Description</label>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="A premium gift box with assorted dry fruits..."
+                rows={3}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Items (one per line)</label>
+              <Textarea
+                value={itemsText}
+                onChange={(e) => setItemsText(e.target.value)}
+                placeholder="200g Premium Cashews
+150g California Almonds
+100g Pistachios"
+                rows={4}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Image URL</label>
+              <Input
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://example.com/image.jpg"
+              />
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="featured" 
+                checked={featured}
+                onCheckedChange={(checked) => setFeatured(!!checked)}
+              />
+              <label htmlFor="featured" className="text-sm font-medium">
+                Featured gift box
+              </label>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit} className="bg-amber-600 hover:bg-amber-700">
+              {isEditing ? 'Update' : 'Create'} Gift Box
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
