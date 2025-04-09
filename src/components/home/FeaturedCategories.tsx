@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Category } from '@/types/database.types';
 import { getCategories } from '@/api/productApi';
 import { Link } from 'react-router-dom';
+import { Gift, Package } from 'lucide-react';
 
 const FeaturedCategories = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -40,6 +41,24 @@ const FeaturedCategories = () => {
     );
   }
 
+  // Add our special categories
+  const specialCategories = [
+    {
+      id: 'gift-boxes',
+      name: 'Gift Boxes',
+      slug: 'products?filter=gift_suitable',
+      image_url: '/placeholder.svg',
+      icon: <Gift className="h-12 w-12 text-amber-500 mb-3" />
+    },
+    {
+      id: 'bulk-orders',
+      name: 'Bulk Orders',
+      slug: 'products?filter=bulk_available',
+      image_url: '/placeholder.svg',
+      icon: <Package className="h-12 w-12 text-amber-600 mb-3" />
+    }
+  ];
+
   return (
     <section className="py-16 bg-gray-50">
       <div className="container mx-auto px-4">
@@ -53,10 +72,29 @@ const FeaturedCategories = () => {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Special Categories */}
+          {specialCategories.map((category) => (
+            <Link 
+              key={category.id} 
+              to={`/${category.slug}`}
+              className="group block"
+            >
+              <div className="overflow-hidden rounded-lg shadow-sm transition-all duration-300 group-hover:shadow-md bg-white p-6 text-center h-full">
+                <div className="flex flex-col items-center justify-center h-full">
+                  {category.icon}
+                  <h3 className="text-xl font-bold text-gray-800 group-hover:text-amber-600 transition-colors">
+                    {category.name}
+                  </h3>
+                </div>
+              </div>
+            </Link>
+          ))}
+          
+          {/* Regular Categories */}
           {categories.map((category) => (
             <Link 
               key={category.id} 
-              to={`/categories/${category.slug}`}
+              to={`/category/${category.slug}`}
               className="group block"
             >
               <div className="overflow-hidden rounded-lg shadow-sm transition-all duration-300 group-hover:shadow-md">
