@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProductsTab from './tabs/ProductsTab';
 import CategoriesTab from './tabs/CategoriesTab';
 import OrdersTab from './tabs/OrdersTab';
+import GiftBoxesTab from './tabs/GiftBoxesTab';
 import { Link, useNavigate } from 'react-router-dom';
 
 const AdminDashboard = () => {
@@ -90,9 +91,10 @@ const AdminDashboard = () => {
         </div>
         
         <Tabs defaultValue="products" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-8">
+          <TabsList className="grid w-full grid-cols-4 mb-8">
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="categories">Categories</TabsTrigger>
+            <TabsTrigger value="gift-boxes">Gift Boxes</TabsTrigger>
             <TabsTrigger value="orders">Orders</TabsTrigger>
           </TabsList>
           
@@ -102,6 +104,10 @@ const AdminDashboard = () => {
           
           <TabsContent value="categories">
             <CategoriesTab />
+          </TabsContent>
+          
+          <TabsContent value="gift-boxes">
+            <GiftBoxesTab />
           </TabsContent>
           
           <TabsContent value="orders">

@@ -1,311 +1,292 @@
 
-import { ShoppingCart, User, Menu, Phone, Mail, X, ChevronDown, Heart, LogOut } from "lucide-react";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Button } from "../ui/button";
-import { useAuth } from "@/contexts/AuthContext";
-import { SearchBar } from "@/components/search/SearchBar";
-import { CurrencySelector } from "./CurrencySelector";
-import { LanguageSelector } from "./LanguageSelector";
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { getCartItems } from '@/api/cartApi';
+import SearchBar from '../search/SearchBar';
+import { Button } from '../ui/button';
+import LanguageSelector from './LanguageSelector';
+import CurrencySelector from './CurrencySelector';
+import { 
+  ShoppingCart, 
+  User, 
+  LogIn, 
+  Menu, 
+  X, 
+  Heart, 
+  Package, 
+  Gift,
+  LogOut,
+  LayoutDashboard
+} from 'lucide-react';
+import { useMobile } from '@/hooks/use-mobile';
 
 const Header = () => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isPromoBarVisible, setIsPromoBarVisible] = useState(true);
-  const [selectedCurrency, setSelectedCurrency] = useState("INR");
-  const [selectedLanguage, setSelectedLanguage] = useState("EN");
-  const { user, signOut } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
   const navigate = useNavigate();
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/");
+  const isMobile = useMobile();
+  
+  useEffect(() => {
+    if (user) {
+      const loadCartItems = async () => {
+        try {
+          const items = await getCartItems();
+          const itemCount = items.reduce((total, item) => total + item.quantity, 0);
+          setCartCount(itemCount);
+        } catch (error) {
+          console.error('Error loading cart items:', error);
+        }
+      };
+      
+      loadCartItems();
+    } else {
+      setCartCount(0);
+    }
+  }, [user]);
+  
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+    setMobileMenuOpen(false);
   };
-
+  
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(!mobileMenuOpen);
+  };
+  
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false);
+  };
+  
   return (
-    <header className="bg-white">
-      {/* Summer BBQ Special Promo */}
-      {isPromoBarVisible && (
-        <div className="bg-amber-50 py-2 px-4">
-          <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center">
-            <div className="flex items-center gap-3">
-              <img 
-                src="/lovable-uploads/735f0ea8-5995-4cf6-810d-0763087415f9.png" 
-                alt="Summer BBQ" 
-                className="w-16 h-16 rounded-full object-cover"
-              />
-              <div>
-                <h3 className="text-amber-800 font-semibold text-lg">Summer BBQ Special</h3>
-                <p className="text-amber-700 text-sm">
-                  Get 15% off our BBQ spice blends and nut mixes for your summer gatherings!
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row items-center gap-3 mt-2 sm:mt-0">
-              <div className="text-right">
-                <p className="text-amber-700 text-sm">Offer ends in:</p>
-                <div className="flex gap-2">
-                  <span className="bg-amber-700 text-white px-2 py-1 rounded text-xs">147d</span>
-                  <span className="bg-amber-700 text-white px-2 py-1 rounded text-xs">15h</span>
-                  <span className="bg-amber-700 text-white px-2 py-1 rounded text-xs">33m</span>
-                  <span className="bg-amber-700 text-white px-2 py-1 rounded text-xs">25s</span>
-                </div>
-              </div>
-              <div className="flex gap-2 mt-2 sm:mt-0">
-                <Button variant="outline" className="border-amber-800 text-amber-800 hover:bg-amber-100">
-                  SUMMER15 <span className="ml-1">📋</span>
-                </Button>
-                <Button className="bg-amber-800 text-white hover:bg-amber-700">
-                  Explore
-                </Button>
-                <button 
-                  onClick={() => setIsPromoBarVisible(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Contact Bar */}
-      <div className="bg-amber-600 text-white py-2 px-4">
-        <div className="container mx-auto flex justify-between items-center">
-          <div className="flex items-center space-x-6">
-            <div className="flex items-center">
-              <Phone size={16} className="mr-2" />
-              <span className="text-sm">(555) 123-4567</span>
-            </div>
-            <div className="hidden md:flex items-center">
-              <Mail size={16} className="mr-2" />
-              <span className="text-sm">info@spicenutemprium.com</span>
-            </div>
-          </div>
-          <div className="flex items-center">
-            <div className="flex items-center">
-              <span className="text-sm mr-2">🎁 Free shipping on orders over $50!</span>
-              <button 
-                onClick={() => {}}
-                className="text-white hover:text-amber-200"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Header */}
-      <div className="border-b border-gray-200 py-4 px-4">
-        <div className="container mx-auto flex items-center justify-between">
+    <header className="bg-white shadow-sm sticky top-0 z-50 border-b border-gray-200">
+      <div className="container mx-auto px-4">
+        <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center">
-            <div className="flex flex-col items-start">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center mr-2">
-                  <span className="text-white text-xl font-bold">⊙</span>
-                </div>
-                <h1 className="text-xl font-bold text-gray-800">
-                  Spice & Nut
-                </h1>
-              </div>
-              <span className="text-amber-600 text-xs font-semibold tracking-wider">PREMIUM EMPORIUM</span>
-            </div>
+          <Link to="/" className="font-bold text-xl text-amber-600">
+            DryFruits & Nuts
           </Link>
-
-          {/* Search Bar */}
-          <div className="hidden md:block relative w-1/3">
-            <SearchBar 
-              minimal={true}
-              placeholder="Search products, spices, recipes..." 
-            />
-          </div>
-
-          {/* Navigation */}
-          <nav className="hidden md:flex space-x-8">
-            <Link to="/" className="text-gray-800 hover:text-amber-600 font-medium">
+          
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex space-x-6">
+            <Link to="/" className="text-gray-700 hover:text-amber-600 transition-colors">
               Home
             </Link>
-            <div className="relative group">
-              <Link to="/products" className="text-gray-800 hover:text-amber-600 font-medium flex items-center">
-                Products <ChevronDown size={16} className="ml-1" />
-              </Link>
-            </div>
-            <Link to="/about" className="text-gray-800 hover:text-amber-600 font-medium">
+            <Link to="/products" className="text-gray-700 hover:text-amber-600 transition-colors">
+              Products
+            </Link>
+            <Link to="/gift-boxes" className="text-gray-700 hover:text-amber-600 transition-colors">
+              Gift Boxes
+            </Link>
+            <Link to="/services" className="text-gray-700 hover:text-amber-600 transition-colors">
+              Special Services
+            </Link>
+            <Link to="/about" className="text-gray-700 hover:text-amber-600 transition-colors">
               About Us
             </Link>
-            <Link to="/contact" className="text-gray-800 hover:text-amber-600 font-medium">
-              Contact Us
+            <Link to="/contact" className="text-gray-700 hover:text-amber-600 transition-colors">
+              Contact
             </Link>
           </nav>
-
-          {/* Right Side Icons */}
-          <div className="flex items-center space-x-3">
-            <div className="hidden md:flex items-center border-r border-gray-200 pr-3">
-              <CurrencySelector 
-                value={selectedCurrency} 
-                onValueChange={setSelectedCurrency} 
-              />
+          
+          {/* Right Actions */}
+          <div className="flex items-center space-x-4">
+            {!isMobile && <SearchBar />}
+            
+            {/* Language & Currency */}
+            <div className="hidden lg:flex items-center space-x-2">
+              <LanguageSelector />
+              <CurrencySelector />
             </div>
             
-            <button className="text-gray-800 hidden md:block">
-              <div className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center">
-                <span className="text-amber-800">☀</span>
-              </div>
-            </button>
-            
-            <div className="hidden md:flex items-center border-l border-gray-200 pl-3">
-              <LanguageSelector 
-                value={selectedLanguage} 
-                onValueChange={setSelectedLanguage} 
-              />
-            </div>
-            
-            <div className="flex items-center space-x-3 border-l border-gray-200 pl-3">
-              <Link to="/wishlist" className="text-gray-800 hover:text-amber-600 hidden md:block">
-                <Heart size={22} />
-              </Link>
-              <Link to="/cart" className="text-gray-800 hover:text-amber-600">
-                <ShoppingCart size={22} />
-              </Link>
-              
-              {user ? (
-                <div className="relative group hidden md:block">
-                  <button className="flex items-center text-amber-600 font-medium">
-                    <User size={22} className="mr-1" />
-                    <span className="hidden lg:inline">Account</span>
-                    <ChevronDown size={16} className="ml-1" />
-                  </button>
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                    <Link to="/profile" className="block px-4 py-2 text-gray-800 hover:bg-amber-50">My Profile</Link>
-                    <Link to="/orders" className="block px-4 py-2 text-gray-800 hover:bg-amber-50">My Orders</Link>
-                    <button 
-                      onClick={handleSignOut}
-                      className="w-full text-left px-4 py-2 text-gray-800 hover:bg-amber-50 flex items-center"
-                    >
-                      <LogOut size={16} className="mr-2" /> Sign Out
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <Link to="/login" className="text-amber-600 font-medium hidden md:block">
-                  Sign In
+            {/* User Menu */}
+            {user ? (
+              <div className="flex items-center space-x-4">
+                <Link 
+                  to="/cart" 
+                  className="text-gray-700 hover:text-amber-600 transition-colors relative"
+                >
+                  <ShoppingCart size={20} />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-amber-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                      {cartCount}
+                    </span>
+                  )}
                 </Link>
-              )}
-              
-              <button 
-                className="md:hidden text-gray-800 hover:text-amber-600"
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-              >
-                <Menu size={22} />
-              </button>
-            </div>
+                <Link 
+                  to="/profile" 
+                  className="text-gray-700 hover:text-amber-600 transition-colors"
+                >
+                  <User size={20} />
+                </Link>
+                {isAdmin && (
+                  <Link 
+                    to="/admin" 
+                    className="text-gray-700 hover:text-amber-600 transition-colors"
+                  >
+                    <LayoutDashboard size={20} />
+                  </Link>
+                )}
+                <button
+                  onClick={handleLogout}
+                  className="text-gray-700 hover:text-amber-600 transition-colors md:block hidden"
+                >
+                  <LogOut size={20} />
+                </button>
+              </div>
+            ) : (
+              <Link to="/login">
+                <Button variant="ghost" size="sm" className="flex items-center">
+                  <LogIn className="h-4 w-4 mr-2" />
+                  Sign In
+                </Button>
+              </Link>
+            )}
+            
+            {/* Mobile Menu Button */}
+            <button 
+              className="md:hidden text-gray-700"
+              onClick={toggleMobileMenu}
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
           </div>
         </div>
-
-        {/* Mobile Menu */}
-        {isMenuOpen && (
-          <div className="md:hidden mt-4 pb-2">
-            <div className="flex justify-center mb-4">
-              <div className="relative w-full px-4">
-                <SearchBar 
-                  minimal={true}
-                  placeholder="Search products, spices, recipes..." 
-                />
-              </div>
-            </div>
-            <nav className="flex flex-col space-y-3 px-4">
+        
+        {/* Mobile Search */}
+        {isMobile && (
+          <div className="pb-2">
+            <SearchBar />
+          </div>
+        )}
+      </div>
+      
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="md:hidden bg-white border-t border-gray-200">
+          <div className="container mx-auto px-4 py-4">
+            <nav className="flex flex-col space-y-4">
               <Link 
                 to="/" 
-                className="text-gray-800 hover:text-amber-600 font-medium"
-                onClick={() => setIsMenuOpen(false)}
+                className="text-gray-700 hover:text-amber-600 transition-colors py-2"
+                onClick={closeMobileMenu}
               >
                 Home
               </Link>
               <Link 
                 to="/products" 
-                className="text-gray-800 hover:text-amber-600 font-medium"
-                onClick={() => setIsMenuOpen(false)}
+                className="text-gray-700 hover:text-amber-600 transition-colors py-2"
+                onClick={closeMobileMenu}
               >
                 Products
               </Link>
               <Link 
+                to="/gift-boxes" 
+                className="text-gray-700 hover:text-amber-600 transition-colors py-2"
+                onClick={closeMobileMenu}
+              >
+                <Gift className="inline-block mr-2 h-4 w-4" />
+                Gift Boxes
+              </Link>
+              <Link 
+                to="/services" 
+                className="text-gray-700 hover:text-amber-600 transition-colors py-2"
+                onClick={closeMobileMenu}
+              >
+                <Package className="inline-block mr-2 h-4 w-4" />
+                Special Services
+              </Link>
+              <Link 
                 to="/about" 
-                className="text-gray-800 hover:text-amber-600 font-medium"
-                onClick={() => setIsMenuOpen(false)}
+                className="text-gray-700 hover:text-amber-600 transition-colors py-2"
+                onClick={closeMobileMenu}
               >
                 About Us
               </Link>
               <Link 
                 to="/contact" 
-                className="text-gray-800 hover:text-amber-600 font-medium"
-                onClick={() => setIsMenuOpen(false)}
+                className="text-gray-700 hover:text-amber-600 transition-colors py-2"
+                onClick={closeMobileMenu}
               >
-                Contact Us
+                Contact
               </Link>
               
+              {/* Language & Currency for Mobile */}
+              <div className="flex flex-col space-y-4 pt-2 border-t border-gray-100">
+                <div className="flex items-center">
+                  <span className="text-gray-500 mr-2">Language:</span>
+                  <LanguageSelector />
+                </div>
+                <div className="flex items-center">
+                  <span className="text-gray-500 mr-2">Currency:</span>
+                  <CurrencySelector />
+                </div>
+              </div>
+              
+              {/* User Actions for Mobile */}
               {user ? (
-                <>
+                <div className="flex flex-col space-y-4 pt-2 border-t border-gray-100">
                   <Link 
                     to="/profile" 
-                    className="text-gray-800 hover:text-amber-600 font-medium"
-                    onClick={() => setIsMenuOpen(false)}
+                    className="text-gray-700 hover:text-amber-600 transition-colors py-2"
+                    onClick={closeMobileMenu}
                   >
+                    <User className="inline-block mr-2 h-4 w-4" />
                     My Profile
                   </Link>
                   <Link 
-                    to="/orders" 
-                    className="text-gray-800 hover:text-amber-600 font-medium"
-                    onClick={() => setIsMenuOpen(false)}
+                    to="/cart" 
+                    className="text-gray-700 hover:text-amber-600 transition-colors py-2"
+                    onClick={closeMobileMenu}
                   >
-                    My Orders
+                    <ShoppingCart className="inline-block mr-2 h-4 w-4" />
+                    Cart ({cartCount})
                   </Link>
-                  <button
-                    onClick={() => {
-                      handleSignOut();
-                      setIsMenuOpen(false);
-                    }}
-                    className="text-left text-gray-800 hover:text-amber-600 font-medium flex items-center"
+                  <Link 
+                    to="/wishlist" 
+                    className="text-gray-700 hover:text-amber-600 transition-colors py-2"
+                    onClick={closeMobileMenu}
                   >
-                    <LogOut size={16} className="mr-2" /> Sign Out
+                    <Heart className="inline-block mr-2 h-4 w-4" />
+                    Wishlist
+                  </Link>
+                  {isAdmin && (
+                    <Link 
+                      to="/admin" 
+                      className="text-gray-700 hover:text-amber-600 transition-colors py-2"
+                      onClick={closeMobileMenu}
+                    >
+                      <LayoutDashboard className="inline-block mr-2 h-4 w-4" />
+                      Admin Dashboard
+                    </Link>
+                  )}
+                  <button
+                    onClick={handleLogout}
+                    className="text-gray-700 hover:text-amber-600 transition-colors py-2 text-left"
+                  >
+                    <LogOut className="inline-block mr-2 h-4 w-4" />
+                    Sign Out
                   </button>
-                </>
+                </div>
               ) : (
-                <Link 
-                  to="/login" 
-                  className="text-gray-800 hover:text-amber-600 font-medium"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Sign In
-                </Link>
+                <div className="pt-2 border-t border-gray-100">
+                  <Link 
+                    to="/login" 
+                    className="bg-amber-600 text-white px-4 py-2 rounded inline-block hover:bg-amber-700 transition-colors"
+                    onClick={closeMobileMenu}
+                  >
+                    <LogIn className="inline-block mr-2 h-4 w-4" />
+                    Sign In
+                  </Link>
+                </div>
               )}
-              
-              <div className="flex justify-between pt-2 border-t border-gray-200">
-                <div className="flex items-center">
-                  <LanguageSelector
-                    value={selectedLanguage}
-                    onValueChange={(value) => {
-                      setSelectedLanguage(value);
-                      setIsMenuOpen(false);
-                    }}
-                  />
-                </div>
-                <div className="flex items-center">
-                  <CurrencySelector
-                    value={selectedCurrency}
-                    onValueChange={(value) => {
-                      setSelectedCurrency(value);
-                      setIsMenuOpen(false);
-                    }}
-                  />
-                </div>
-              </div>
             </nav>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </header>
   );
 };

@@ -17,6 +17,7 @@ import CategoryPage from './pages/CategoryPage';
 import NotFound from './pages/NotFound';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import SpecialServicesPage from './pages/SpecialServicesPage';
+import GiftBoxPage from './pages/GiftBoxPage';
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
           <Route path="/categories/:slug" element={<CategoryPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/services" element={<SpecialServicesPage />} />
+          <Route path="/gift-boxes" element={<GiftBoxPage />} />
           <Route path="/checkout" element={
             <PrivateRoute>
               <CheckoutPage />
