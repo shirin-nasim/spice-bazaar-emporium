@@ -117,8 +117,16 @@ const CategoriesTab = () => {
       setLoading(true);
       
       try {
-        const categoriesData = await getCategories(debouncedSearch);
-        setCategories(categoriesData);
+        const categoriesData = await getCategories();
+        
+        const filteredCategories = debouncedSearch
+          ? categoriesData.filter(cat => 
+              cat.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+              cat.description?.toLowerCase().includes(debouncedSearch.toLowerCase())
+            )
+          : categoriesData;
+        
+        setCategories(filteredCategories);
       } catch (error) {
         console.error('Error searching categories:', error);
       } finally {
@@ -131,7 +139,14 @@ const CategoriesTab = () => {
   
   const onCreateSubmit = async (data: CategoryFormValues) => {
     try {
-      const result = await createCategory(data);
+      const categoryData = {
+        name: data.name,
+        slug: data.slug,
+        description: data.description || null,
+        image_url: data.image_url || null
+      };
+      
+      const result = await createCategory(categoryData);
       
       if (result) {
         toast({
