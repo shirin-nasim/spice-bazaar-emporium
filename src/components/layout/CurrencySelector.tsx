@@ -48,7 +48,7 @@ interface CurrencySelectorProps {
   onValueChange: (value: string) => void;
 }
 
-export const CurrencySelector: React.FC<CurrencySelectorProps> = ({ 
+const CurrencySelector: React.FC<CurrencySelectorProps> = ({ 
   value, 
   onValueChange 
 }) => {
@@ -84,3 +84,5 @@ export const CurrencySelector: React.FC<CurrencySelectorProps> = ({
     </Select>
   );
 };
+
+export default CurrencySelector;

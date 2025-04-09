@@ -47,7 +47,7 @@ interface LanguageSelectorProps {
   onValueChange: (value: string) => void;
 }
 
-export const LanguageSelector: React.FC<LanguageSelectorProps> = ({ 
+const LanguageSelector: React.FC<LanguageSelectorProps> = ({ 
   value, 
   onValueChange 
 }) => {
@@ -83,3 +83,5 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
     </Select>
   );
 };
+
+export default LanguageSelector;
