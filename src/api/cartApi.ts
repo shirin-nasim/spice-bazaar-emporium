@@ -91,6 +91,22 @@ export async function addToCart(
   return true;
 }
 
+// Get user's cart 
+export async function getUserCart(userId: string) {
+  const { data, error } = await supabase
+    .from('carts')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+  
+  if (error) {
+    console.error('Error fetching user cart:', error);
+    return null;
+  }
+  
+  return data;
+}
+
 // Get cart items (including gift boxes)
 export async function getCartItems() {
   // Get the current user

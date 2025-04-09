@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Category } from '@/types/database.types';
 import { getCategories } from '@/api/productApi';
 import { Link } from 'react-router-dom';
-import { Package } from 'lucide-react';
+import { Package, Gift } from 'lucide-react';
 
 const FeaturedCategories = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -41,7 +41,7 @@ const FeaturedCategories = () => {
     );
   }
 
-  // Add only the Bulk Orders special category
+  // Add special categories
   const specialCategories = [
     {
       id: 'bulk-orders',
@@ -49,6 +49,13 @@ const FeaturedCategories = () => {
       slug: 'products?filter=bulk_available',
       image_url: '/placeholder.svg',
       icon: <Package className="h-12 w-12 text-amber-600 mb-3" />
+    },
+    {
+      id: 'gift-boxes',
+      name: 'Gift Boxes',
+      slug: 'gift-boxes',
+      image_url: '/placeholder.svg',
+      icon: <Gift className="h-12 w-12 text-amber-600 mb-3" />
     }
   ];
 

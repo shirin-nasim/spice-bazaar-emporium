@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { addToCart, getUserCart } from '@/api/cartApi';
+import { addToCart } from '@/api/cartApi';
 import { addToWishlist, isInWishlist, removeFromWishlist } from '@/api/wishlistApi';
 
 interface ProductCardProps {
@@ -48,12 +48,7 @@ const ProductCard = ({ product, featured = false }: ProductCardProps) => {
 
     setLoading(true);
     try {
-      const cart = await getUserCart(user.id);
-      if (!cart) {
-        throw new Error('Could not retrieve your cart');
-      }
-      
-      const result = await addToCart(cart.id, product.id, 1);
+      const result = await addToCart(product.id, 1);
       if (result) {
         toast({
           title: 'Added to cart',

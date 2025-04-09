@@ -50,13 +50,12 @@ export async function getOrderItems(orderId: number): Promise<OrderItem[]> {
 
 export async function createOrder(
   userId: string,
-  cartId: number,
   shippingAddress: any,
   billingAddress: any,
   paymentMethod: string
 ): Promise<Order | null> {
   // Get cart items
-  const cartItems = await getCartItems(cartId);
+  const cartItems = await getCartItems();
   if (!cartItems.length) {
     console.error('Cannot create order: cart is empty');
     return null;
@@ -67,19 +66,27 @@ export async function createOrder(
   const orderItems = [];
   
   for (const item of cartItems) {
-    const product = await getProductById(item.product_id);
-    if (!product) continue;
+    totalAmount += item.price * item.quantity;
     
-    const price = product.sale_price || product.price;
-    totalAmount += price * item.quantity;
-    
-    orderItems.push({
-      product_id: product.id,
-      product_name: product.name,
-      quantity: item.quantity,
-      price: price,
-      pack_size: item.pack_size
-    });
+    if (item.isGiftBox) {
+      orderItems.push({
+        product_id: null,
+        gift_box_id: item.productId,
+        product_name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        pack_size: item.packSize
+      });
+    } else {
+      orderItems.push({
+        product_id: item.productId,
+        gift_box_id: null,
+        product_name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        pack_size: item.packSize
+      });
+    }
   }
 
   // Create order
@@ -109,6 +116,7 @@ export async function createOrder(
       .insert([{
         order_id: order.id,
         product_id: item.product_id,
+        gift_box_id: item.gift_box_id,
         product_name: item.product_name,
         quantity: item.quantity,
         price: item.price,
@@ -121,7 +129,7 @@ export async function createOrder(
   }
 
   // Clear cart
-  await clearCart(cartId);
+  await clearCart();
   
   return order;
 }

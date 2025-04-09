@@ -46,6 +46,18 @@ export interface Product {
   updated_at: string;
 }
 
+export interface GiftBox {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  price: number;
+  image_url: string | null;
+  items: string[];
+  featured: boolean;
+  created_at: string;
+}
+
 export interface Review {
   id: number;
   product_id: number;
@@ -72,7 +84,8 @@ export interface Cart {
 export interface CartItem {
   id: number;
   cart_id: number;
-  product_id: number;
+  product_id: number | null;
+  gift_box_id: number | null; 
   quantity: number;
   pack_size: string | null;
   created_at: string;
@@ -96,6 +109,7 @@ export interface OrderItem {
   id: number;
   order_id: number;
   product_id: number | null;
+  gift_box_id: number | null;
   product_name: string;
   quantity: number;
   price: number;

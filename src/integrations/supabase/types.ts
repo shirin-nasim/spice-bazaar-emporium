@@ -31,6 +31,7 @@ export type Database = {
         Row: {
           cart_id: number
           created_at: string
+          gift_box_id: number | null
           id: number
           pack_size: string | null
           product_id: number
@@ -40,6 +41,7 @@ export type Database = {
         Insert: {
           cart_id: number
           created_at?: string
+          gift_box_id?: number | null
           id?: number
           pack_size?: string | null
           product_id: number
@@ -49,6 +51,7 @@ export type Database = {
         Update: {
           cart_id?: number
           created_at?: string
+          gift_box_id?: number | null
           id?: number
           pack_size?: string | null
           product_id?: number
@@ -61,6 +64,13 @@ export type Database = {
             columns: ["cart_id"]
             isOneToOne: false
             referencedRelation: "carts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cart_items_gift_box_id_fkey"
+            columns: ["gift_box_id"]
+            isOneToOne: false
+            referencedRelation: "gift_boxes"
             referencedColumns: ["id"]
           },
           {
@@ -120,9 +130,46 @@ export type Database = {
         }
         Relationships: []
       }
+      gift_boxes: {
+        Row: {
+          created_at: string
+          description: string
+          featured: boolean | null
+          id: number
+          image_url: string | null
+          items: string[]
+          name: string
+          price: number
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          featured?: boolean | null
+          id?: number
+          image_url?: string | null
+          items?: string[]
+          name: string
+          price: number
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          featured?: boolean | null
+          id?: number
+          image_url?: string | null
+          items?: string[]
+          name?: string
+          price?: number
+          slug?: string
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           created_at: string
+          gift_box_id: number | null
           id: number
           order_id: number
           pack_size: string | null
@@ -133,6 +180,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          gift_box_id?: number | null
           id?: number
           order_id: number
           pack_size?: string | null
@@ -143,6 +191,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          gift_box_id?: number | null
           id?: number
           order_id?: number
           pack_size?: string | null
@@ -152,6 +201,13 @@ export type Database = {
           quantity?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "order_items_gift_box_id_fkey"
+            columns: ["gift_box_id"]
+            isOneToOne: false
+            referencedRelation: "gift_boxes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "order_items_order_id_fkey"
             columns: ["order_id"]

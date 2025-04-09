@@ -1,302 +1,296 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { getCartItems } from '@/api/cartApi';
-import { SearchBar } from '../search/SearchBar';
-import { Button } from '../ui/button';
-import LanguageSelector from './LanguageSelector';
-import CurrencySelector from './CurrencySelector';
+
+import React, { useState } from "react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Search, Menu, X, ShoppingCart, User, Heart, Package, Gift } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { 
-  ShoppingCart, 
-  User, 
-  LogIn, 
-  Menu, 
-  X, 
-  Heart, 
-  Package, 
-  Gift,
-  LogOut,
-  LayoutDashboard
-} from 'lucide-react';
-import { useIsMobile } from '@/hooks/use-mobile';
+  Sheet, 
+  SheetContent, 
+  SheetTrigger 
+} from "@/components/ui/sheet";
+import CurrencySelector from './CurrencySelector';
+import LanguageSelector from './LanguageSelector';
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Header = () => {
-  const { user, logout } = useAuth();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [cartCount, setCartCount] = useState(0);
-  const navigate = useNavigate();
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const isMobile = useIsMobile();
-  const isAdmin = user?.role === 'admin'; // Fallback implementation for isAdmin
-  
-  useEffect(() => {
-    if (user) {
-      const loadCartItems = async () => {
-        try {
-          const items = await getCartItems();
-          const itemCount = items.reduce((total, item) => total + item.quantity, 0);
-          setCartCount(itemCount);
-        } catch (error) {
-          console.error('Error loading cart items:', error);
-        }
-      };
-      
-      loadCartItems();
-    } else {
-      setCartCount(0);
+  const navigate = useNavigate();
+  const { user, isAdmin } = useAuth();
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchTerm.trim()) {
+      navigate(`/products?search=${encodeURIComponent(searchTerm.trim())}`);
+      setIsSearchOpen(false);
+      setSearchTerm("");
     }
-  }, [user]);
-  
+  };
+
   const handleLogout = async () => {
-    try {
-      // Use the logout function from context if available, otherwise implement fallback
-      if (logout) {
-        await logout();
-      } else {
-        // Fallback implementation (should be replaced with actual implementation)
-        console.warn('Logout function not provided in AuthContext');
-        localStorage.removeItem('auth_token');
-        window.location.href = '/';
-      }
-      navigate('/');
-      setMobileMenuOpen(false);
-    } catch (error) {
-      console.error('Error during logout:', error);
-    }
+    // This is a placeholder - the actual logout will be imported from useAuth
+    console.log("Logout");
   };
-  
-  const toggleMobileMenu = () => {
-    setMobileMenuOpen(!mobileMenuOpen);
-  };
-  
-  const closeMobileMenu = () => {
-    setMobileMenuOpen(false);
-  };
-  
+
+  const navigation = [
+    { name: "Home", href: "/" },
+    { name: "Products", href: "/products" },
+    { name: "About", href: "/about" },
+    { name: "Contact", href: "/contact" },
+    { name: "Bulk Orders", href: "/products?filter=bulk_available", icon: <Package className="h-4 w-4 mr-2" /> },
+    { name: "Gift Boxes", href: "/gift-boxes", icon: <Gift className="h-4 w-4 mr-2" /> },
+  ];
+
   return (
-    <header className="bg-white shadow-sm sticky top-0 z-50 border-b border-gray-200">
-      <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center h-16">
+    <header className="border-b border-gray-200">
+      {/* Top Bar */}
+      <div className="bg-gray-100">
+        <div className="container mx-auto px-4 py-2 flex justify-between items-center">
+          <div className="text-sm text-gray-600 hidden sm:block">
+            Free shipping on orders over ₹999
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            <LanguageSelector 
+              value="EN"
+              onValueChange={(value) => console.log('Language changed to', value)}
+            />
+            <CurrencySelector 
+              value="INR"
+              onValueChange={(value) => console.log('Currency changed to', value)}
+            />
+          </div>
+        </div>
+      </div>
+      
+      {/* Main Header */}
+      <div className="container mx-auto px-4 py-4">
+        <div className="flex items-center justify-between">
+          {/* Mobile Menu Trigger */}
+          <Sheet>
+            <SheetTrigger asChild className="md:hidden">
+              <Button variant="ghost" size="icon" aria-label="Menu">
+                <Menu className="h-6 w-6" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[300px] sm:w-[350px]">
+              <div className="flex flex-col h-full">
+                <div className="py-6">
+                  <Link to="/" className="text-2xl font-bold text-gray-800">
+                    DryFruits
+                  </Link>
+                </div>
+                
+                <nav className="flex flex-col space-y-4 mb-8">
+                  {navigation.map((item) => (
+                    <NavLink
+                      key={item.name}
+                      to={item.href}
+                      className={({ isActive }) =>
+                        `px-2 py-2 text-gray-700 ${
+                          isActive ? "text-amber-700 font-medium" : "hover:text-amber-600"
+                        } flex items-center`
+                      }
+                    >
+                      {item.icon && item.icon}
+                      {item.name}
+                    </NavLink>
+                  ))}
+                </nav>
+                
+                <div className="mt-auto space-y-4 py-6 border-t border-gray-200">
+                  {user ? (
+                    <>
+                      <div className="px-2 py-2 text-gray-700">
+                        Signed in as: <span className="font-medium">{user.email}</span>
+                      </div>
+                      <div className="space-y-2">
+                        <NavLink
+                          to="/profile"
+                          className={({ isActive }) =>
+                            `px-2 py-2 text-gray-700 ${
+                              isActive ? "text-amber-700 font-medium" : "hover:text-amber-600"
+                            } block`
+                          }
+                        >
+                          My Profile
+                        </NavLink>
+                        {isAdmin && (
+                          <NavLink
+                            to="/admin"
+                            className={({ isActive }) =>
+                              `px-2 py-2 text-gray-700 ${
+                                isActive ? "text-amber-700 font-medium" : "hover:text-amber-600"
+                              } block`
+                            }
+                          >
+                            Admin Dashboard
+                          </NavLink>
+                        )}
+                        <button
+                          onClick={handleLogout}
+                          className="px-2 py-2 text-gray-700 hover:text-amber-600 block w-full text-left"
+                        >
+                          Sign Out
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      <NavLink
+                        to="/login"
+                        className="px-2 py-2 text-gray-700 hover:text-amber-600 block"
+                      >
+                        Sign In
+                      </NavLink>
+                      <NavLink
+                        to="/register"
+                        className="px-2 py-2 text-gray-700 hover:text-amber-600 block"
+                      >
+                        Create Account
+                      </NavLink>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+          
           {/* Logo */}
-          <Link to="/" className="font-bold text-xl text-amber-600">
-            DryFruits & Nuts
+          <Link to="/" className="text-2xl font-bold text-gray-800">
+            DryFruits
           </Link>
           
           {/* Desktop Navigation */}
           <nav className="hidden md:flex space-x-6">
-            <Link to="/" className="text-gray-700 hover:text-amber-600 transition-colors">
-              Home
-            </Link>
-            <Link to="/products" className="text-gray-700 hover:text-amber-600 transition-colors">
-              Products
-            </Link>
-            <Link to="/gift-boxes" className="text-gray-700 hover:text-amber-600 transition-colors">
-              Gift Boxes
-            </Link>
-            <Link to="/services" className="text-gray-700 hover:text-amber-600 transition-colors">
-              Special Services
-            </Link>
-            <Link to="/about" className="text-gray-700 hover:text-amber-600 transition-colors">
-              About Us
-            </Link>
-            <Link to="/contact" className="text-gray-700 hover:text-amber-600 transition-colors">
-              Contact
-            </Link>
+            {navigation.slice(0, 4).map((item) => (
+              <NavLink
+                key={item.name}
+                to={item.href}
+                className={({ isActive }) =>
+                  `text-gray-700 ${
+                    isActive ? "text-amber-700 font-medium" : "hover:text-amber-600"
+                  }`
+                }
+              >
+                {item.name}
+              </NavLink>
+            ))}
           </nav>
           
-          {/* Right Actions */}
-          <div className="flex items-center space-x-4">
-            {!isMobile && <SearchBar />}
+          {/* Actions */}
+          <div className="flex items-center space-x-1 sm:space-x-2">
+            <button
+              onClick={() => setIsSearchOpen(!isSearchOpen)}
+              className="p-2 text-gray-700 hover:text-amber-600 transition-colors"
+              aria-label="Search"
+            >
+              <Search className="h-5 w-5" />
+            </button>
             
-            {/* Language & Currency */}
-            <div className="hidden lg:flex items-center space-x-2">
-              <LanguageSelector value="EN" onValueChange={() => {}} />
-              <CurrencySelector value="USD" onValueChange={() => {}} />
-            </div>
-            
-            {/* User Menu */}
-            {user ? (
-              <div className="flex items-center space-x-4">
-                <Link 
-                  to="/cart" 
-                  className="text-gray-700 hover:text-amber-600 transition-colors relative"
+            {!isMobile && (
+              <>
+                <NavLink
+                  to="/cart"
+                  className={({ isActive }) =>
+                    `p-2 text-gray-700 ${
+                      isActive ? "text-amber-700" : "hover:text-amber-600"
+                    } transition-colors relative`
+                  }
+                  aria-label="Cart"
                 >
-                  <ShoppingCart size={20} />
-                  {cartCount > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-amber-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                      {cartCount}
-                    </span>
-                  )}
-                </Link>
-                <Link 
-                  to="/profile" 
-                  className="text-gray-700 hover:text-amber-600 transition-colors"
+                  <ShoppingCart className="h-5 w-5" />
+                </NavLink>
+                
+                <NavLink
+                  to="/profile"
+                  className={({ isActive }) =>
+                    `p-2 text-gray-700 ${
+                      isActive ? "text-amber-700" : "hover:text-amber-600"
+                    } transition-colors`
+                  }
+                  aria-label="Profile"
                 >
-                  <User size={20} />
-                </Link>
-                {isAdmin && (
-                  <Link 
-                    to="/admin" 
-                    className="text-gray-700 hover:text-amber-600 transition-colors"
-                  >
-                    <LayoutDashboard size={20} />
-                  </Link>
-                )}
-                <button
-                  onClick={handleLogout}
-                  className="text-gray-700 hover:text-amber-600 transition-colors md:block hidden"
-                >
-                  <LogOut size={20} />
-                </button>
-              </div>
-            ) : (
-              <Link to="/login">
-                <Button variant="ghost" size="sm" className="flex items-center">
-                  <LogIn className="h-4 w-4 mr-2" />
-                  Sign In
-                </Button>
-              </Link>
+                  <User className="h-5 w-5" />
+                </NavLink>
+              </>
             )}
             
-            {/* Mobile Menu Button */}
-            <button 
-              className="md:hidden text-gray-700"
-              onClick={toggleMobileMenu}
-              aria-label="Toggle menu"
-            >
-              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
+            {isMobile && (
+              <>
+                <NavLink
+                  to="/cart"
+                  className={({ isActive }) =>
+                    `p-2 text-gray-700 ${
+                      isActive ? "text-amber-700" : "hover:text-amber-600"
+                    } transition-colors relative`
+                  }
+                  aria-label="Cart"
+                >
+                  <ShoppingCart className="h-5 w-5" />
+                </NavLink>
+              </>
+            )}
           </div>
         </div>
-        
-        {/* Mobile Search */}
-        {isMobile && (
-          <div className="pb-2">
-            <SearchBar />
-          </div>
-        )}
       </div>
       
-      {/* Mobile Menu */}
-      {mobileMenuOpen && (
-        <div className="md:hidden bg-white border-t border-gray-200">
-          <div className="container mx-auto px-4 py-4">
-            <nav className="flex flex-col space-y-4">
-              <Link 
-                to="/" 
-                className="text-gray-700 hover:text-amber-600 transition-colors py-2"
-                onClick={closeMobileMenu}
-              >
-                Home
-              </Link>
-              <Link 
-                to="/products" 
-                className="text-gray-700 hover:text-amber-600 transition-colors py-2"
-                onClick={closeMobileMenu}
-              >
-                Products
-              </Link>
-              <Link 
-                to="/gift-boxes" 
-                className="text-gray-700 hover:text-amber-600 transition-colors py-2"
-                onClick={closeMobileMenu}
-              >
-                <Gift className="inline-block mr-2 h-4 w-4" />
-                Gift Boxes
-              </Link>
-              <Link 
-                to="/services" 
-                className="text-gray-700 hover:text-amber-600 transition-colors py-2"
-                onClick={closeMobileMenu}
-              >
-                <Package className="inline-block mr-2 h-4 w-4" />
-                Special Services
-              </Link>
-              <Link 
-                to="/about" 
-                className="text-gray-700 hover:text-amber-600 transition-colors py-2"
-                onClick={closeMobileMenu}
-              >
-                About Us
-              </Link>
-              <Link 
-                to="/contact" 
-                className="text-gray-700 hover:text-amber-600 transition-colors py-2"
-                onClick={closeMobileMenu}
-              >
-                Contact
-              </Link>
-              
-              {/* Language & Currency for Mobile */}
-              <div className="flex flex-col space-y-4 pt-2 border-t border-gray-100">
-                <div className="flex items-center">
-                  <span className="text-gray-500 mr-2">Language:</span>
-                  <LanguageSelector value="EN" onValueChange={() => {}} />
-                </div>
-                <div className="flex items-center">
-                  <span className="text-gray-500 mr-2">Currency:</span>
-                  <CurrencySelector value="USD" onValueChange={() => {}} />
-                </div>
-              </div>
-              
-              {/* User Actions for Mobile */}
-              {user ? (
-                <div className="flex flex-col space-y-4 pt-2 border-t border-gray-100">
-                  <Link 
-                    to="/profile" 
-                    className="text-gray-700 hover:text-amber-600 transition-colors py-2"
-                    onClick={closeMobileMenu}
-                  >
-                    <User className="inline-block mr-2 h-4 w-4" />
-                    My Profile
-                  </Link>
-                  <Link 
-                    to="/cart" 
-                    className="text-gray-700 hover:text-amber-600 transition-colors py-2"
-                    onClick={closeMobileMenu}
-                  >
-                    <ShoppingCart className="inline-block mr-2 h-4 w-4" />
-                    Cart ({cartCount})
-                  </Link>
-                  <Link 
-                    to="/wishlist" 
-                    className="text-gray-700 hover:text-amber-600 transition-colors py-2"
-                    onClick={closeMobileMenu}
-                  >
-                    <Heart className="inline-block mr-2 h-4 w-4" />
-                    Wishlist
-                  </Link>
-                  {isAdmin && (
-                    <Link 
-                      to="/admin" 
-                      className="text-gray-700 hover:text-amber-600 transition-colors py-2"
-                      onClick={closeMobileMenu}
-                    >
-                      <LayoutDashboard className="inline-block mr-2 h-4 w-4" />
-                      Admin Dashboard
-                    </Link>
-                  )}
-                  <button
-                    onClick={handleLogout}
-                    className="text-gray-700 hover:text-amber-600 transition-colors py-2 text-left"
-                  >
-                    <LogOut className="inline-block mr-2 h-4 w-4" />
-                    Sign Out
-                  </button>
-                </div>
-              ) : (
-                <div className="pt-2 border-t border-gray-100">
-                  <Link 
-                    to="/login" 
-                    className="bg-amber-600 text-white px-4 py-2 rounded inline-block hover:bg-amber-700 transition-colors"
-                    onClick={closeMobileMenu}
-                  >
-                    <LogIn className="inline-block mr-2 h-4 w-4" />
-                    Sign In
-                  </Link>
-                </div>
-              )}
-            </nav>
-          </div>
+      {/* Search Bar */}
+      {isSearchOpen && (
+        <div className="container mx-auto px-4 py-4 border-t border-gray-200">
+          <form onSubmit={handleSearch} className="flex justify-between items-center gap-2">
+            <Input
+              type="search"
+              placeholder="Search for products..."
+              className="flex-grow"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              autoFocus
+            />
+            <Button type="submit" className="bg-amber-600 hover:bg-amber-700">
+              Search
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => setIsSearchOpen(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </form>
+        </div>
+      )}
+      
+      {/* Main Navigation - Mobile only */}
+      {isMobile && (
+        <div className="container mx-auto px-4 pb-3 flex justify-between overflow-x-auto hide-scrollbar">
+          <NavLink
+            to="/products?filter=bulk_available"
+            className={({ isActive }) =>
+              `flex flex-col items-center text-xs px-3 ${
+                isActive ? "text-amber-700 font-medium" : "text-gray-700"
+              }`
+            }
+          >
+            <Package className="h-5 w-5 mb-1" />
+            <span>Bulk</span>
+          </NavLink>
+          
+          <NavLink
+            to="/gift-boxes"
+            className={({ isActive }) =>
+              `flex flex-col items-center text-xs px-3 ${
+                isActive ? "text-amber-700 font-medium" : "text-gray-700"
+              }`
+            }
+          >
+            <Gift className="h-5 w-5 mb-1" />
+            <span>Gifts</span>
+          </NavLink>
         </div>
       )}
     </header>
